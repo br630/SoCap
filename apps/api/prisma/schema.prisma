@@ -1,0 +1,359 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ImportSource {
+  PHONE
+  MANUAL
+  SOCIAL
+}
+
+enum RelationshipTier {
+  INNER_CIRCLE
+  CLOSE_FRIENDS
+  FRIENDS
+  ACQUAINTANCES
+  PROFESSIONAL
+}
+
+enum RelationshipType {
+  FAMILY
+  FRIEND
+  COLLEAGUE
+  ROMANTIC
+  OTHER
+}
+
+enum CommunicationFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+}
+
+enum InteractionType {
+  CALL
+  TEXT
+  VIDEO_CALL
+  IN_PERSON
+  EVENT
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum BudgetTier {
+  FREE
+  BUDGET
+  MODERATE
+  PREMIUM
+}
+
+enum EventStatus {
+  DRAFT
+  PLANNING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum RSVPStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+  MAYBE
+}
+
+enum AutoSaveFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum SavingsGoalStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  AUTO_SAVE
+}
+
+enum ReminderType {
+  REACH_OUT
+  BIRTHDAY
+  ANNIVERSARY
+  EVENT
+  SAVINGS
+  CUSTOM
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  DISMISSED
+  SNOOZED
+}
+
+enum ReminderFeedback {
+  HELPFUL
+  NOT_HELPFUL
+}
+
+enum AIInsightType {
+  MESSAGE_SUGGESTION
+  EVENT_IDEA
+  RELATIONSHIP_TIP
+  CONVERSATION_STARTER
+}
+
+model User {
+  id                    String   @id @default(uuid())
+  email                 String   @unique
+  passwordHash          String?
+  firstName             String
+  lastName              String
+  profileImage          String?
+  timezone              String   @default("UTC")
+  notificationPreferences Json
+  isVerified            Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  contacts              Contact[]
+  relationships         Relationship[]
+  events                Event[]
+  savingsGoals          SavingsGoal[]
+  reminders             Reminder[]
+  aiInsights            AIInsight[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Contact {
+  id            String        @id @default(uuid())
+  userId        String
+  name          String
+  phone         String?
+  email         String?
+  profileImage  String?
+  birthday      DateTime?
+  anniversary   DateTime?
+  notes         String?       @db.Text
+  importSource  ImportSource
+  isDeleted     Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relationships Relationship[]
+  eventAttendees EventAttendee[]
+  reminders     Reminder[]
+
+  @@index([userId])
+  @@index([userId, isDeleted])
+  @@map("contacts")
+}
+
+model Relationship {
+  id                    String                @id @default(uuid())
+  userId                String
+  contactId             String
+  tier                  RelationshipTier
+  customLabel           String?
+  relationshipType      RelationshipType
+  communicationFrequency CommunicationFrequency
+  lastContactDate       DateTime?
+  healthScore           Int                   @default(50)
+  sharedInterests       String[]
+  importantDates        Json[]
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact               Contact               @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  interactions         Interaction[]
+
+  @@unique([userId, contactId])
+  @@index([userId])
+  @@index([userId, contactId])
+  @@map("relationships")
+}
+
+model Interaction {
+  id            String          @id @default(uuid())
+  relationshipId String
+  type          InteractionType
+  date          DateTime
+  duration      Int?
+  notes         String?         @db.Text
+  sentiment     Sentiment?
+  createdAt     DateTime        @default(now())
+
+  relationship  Relationship    @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+
+  @@index([relationshipId])
+  @@index([date])
+  @@map("interactions")
+}
+
+model Event {
+  id                  String          @id @default(uuid())
+  userId              String
+  title               String
+  description         String?         @db.Text
+  eventType           String
+  date                DateTime
+  startTime           String
+  endTime             String
+  timezone            String
+  locationName        String?
+  locationAddress     String?
+  locationPlaceId     String?
+  locationLat         Float?
+  locationLng         Float?
+  estimatedCost       Decimal         @db.Decimal(10, 2)
+  actualCost          Decimal?        @db.Decimal(10, 2)
+  budgetTier          BudgetTier
+  status              EventStatus
+  isRecurring         Boolean         @default(false)
+  recurringPattern    Json?
+  linkedSavingsGoalId String?
+  calendarEventId     String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attendees           EventAttendee[]
+  reminders           Reminder[]
+  savingsGoals        SavingsGoal[]
+
+  @@index([userId])
+  @@index([userId, date])
+  @@index([date])
+  @@map("events")
+}
+
+model EventAttendee {
+  id                String      @id @default(uuid())
+  eventId           String
+  contactId         String
+  rsvpStatus        RSVPStatus
+  rsvpDate          DateTime?
+  plusOnes          Int         @default(0)
+  dietaryRestrictions String?
+  notes             String?     @db.Text
+
+  event             Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contact           Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([contactId])
+  @@map("event_attendees")
+}
+
+model SavingsGoal {
+  id                String              @id @default(uuid())
+  userId            String
+  eventId           String?
+  name              String
+  targetAmount      Decimal             @db.Decimal(10, 2)
+  currentAmount     Decimal             @default(0) @db.Decimal(10, 2)
+  currency          String              @default("USD")
+  deadline          DateTime?
+  autoSaveEnabled   Boolean             @default(false)
+  autoSaveAmount    Decimal?            @db.Decimal(10, 2)
+  autoSaveFrequency AutoSaveFrequency?
+  status            SavingsGoalStatus
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event             Event?              @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  transactions      Transaction[]
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([status])
+  @@map("savings_goals")
+}
+
+model Transaction {
+  id                    String          @id @default(uuid())
+  savingsGoalId         String
+  amount                Decimal         @db.Decimal(10, 2)
+  type                  TransactionType
+  date                  DateTime
+  description           String?
+  externalTransactionId String?
+  createdAt             DateTime        @default(now())
+
+  savingsGoal           SavingsGoal     @relation(fields: [savingsGoalId], references: [id], onDelete: Cascade)
+
+  @@index([savingsGoalId])
+  @@index([date])
+  @@map("transactions")
+}
+
+model Reminder {
+  id              String          @id @default(uuid())
+  userId          String
+  contactId       String?
+  eventId         String?
+  type            ReminderType
+  title           String
+  message         String          @db.Text
+  scheduledDate   DateTime
+  isRecurring     Boolean         @default(false)
+  recurringPattern Json?
+  status          ReminderStatus
+  sentAt          DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact         Contact?        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  event           Event?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([scheduledDate, status])
+  @@index([status])
+  @@map("reminders")
+}
+
+model AIInsight {
+  id        String            @id @default(uuid())
+  userId    String
+  type      AIInsightType
+  content   Json
+  context   Json
+  wasUsed   Boolean           @default(false)
+  feedback  ReminderFeedback?
+  createdAt DateTime          @default(now())
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([wasUsed])
+  @@map("ai_insights")
+}
