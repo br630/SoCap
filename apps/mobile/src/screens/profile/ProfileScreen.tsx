@@ -7,10 +7,12 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
 import authService from '../../services/authService';
 
 export default function ProfileScreen() {
+  const navigation = useNavigation();
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -100,6 +102,14 @@ export default function ProfileScreen() {
       )}
 
       <View style={styles.section}>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={() => {
+            navigation.navigate('NotificationPreferences' as never);
+          }}
+        >
+          <Text style={styles.buttonText}>Notification Settings</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={loadProfile}>
           <Text style={styles.buttonText}>Refresh Profile</Text>
         </TouchableOpacity>

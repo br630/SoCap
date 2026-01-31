@@ -1,7 +1,25 @@
 import axios from 'axios';
+import { Platform } from 'react-native';
 
 // API base URL - update this with your backend URL
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+// Android emulator uses 10.0.2.2 to access host machine's localhost
+// iOS simulator can use localhost directly
+// Physical devices need your computer's IP address (e.g., http://192.168.1.77:3000/api)
+const getDefaultApiUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  
+  if (Platform.OS === 'android') {
+    // Android emulator
+    return 'http://10.0.2.2:3000/api';
+  }
+  
+  // iOS simulator or web
+  return 'http://localhost:3000/api';
+};
+
+const API_BASE_URL = getDefaultApiUrl();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

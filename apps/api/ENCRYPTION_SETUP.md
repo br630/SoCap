@@ -39,7 +39,8 @@ ENCRYPTION_KEY=your-64-character-hex-key-here
 After adding the encryption key, restart your API server:
 
 ```bash
-npm run dev
+   cd apps/api
+   npm run db:migrate
 ```
 
 ## How It Works

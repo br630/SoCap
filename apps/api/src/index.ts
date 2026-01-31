@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import authRoutes from './routes/authRoutes';
 import contactRoutes from './routes/contactRoutes';
 import eventRoutes from './routes/eventRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 import { rateLimitMiddleware } from './middleware';
 
 // Load environment variables
@@ -38,6 +39,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -57,10 +59,20 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 // Start server
-app.listen(PORT, () => {
+// Listen on 0.0.0.0 to accept connections from network (for mobile devices)
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🌐 Network access: http://192.168.1.77:${PORT} (or your computer's IP)`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth`);
   console.log(`📇 Contact endpoints: http://localhost:${PORT}/api/contacts`);
   console.log(`📅 Event endpoints: http://localhost:${PORT}/api/events`);
+  console.log(`🔔 Notification endpoints: http://localhost:${PORT}/api/notifications`);
 });
+
+// Start reminder cron jobs (only in production or if enabled)
+if (process.env.ENABLE_CRON_JOBS === 'true' || process.env.NODE_ENV === 'production') {
+  import('./jobs/reminderCron').then(({ startReminderCronJobs }) => {
+    startReminderCronJobs();
+  });
+}

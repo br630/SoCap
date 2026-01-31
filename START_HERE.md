@@ -65,7 +65,7 @@ ifconfig
 ```
 Look for "inet" under WiFi adapter
 
-**Write it down:** `_________________` (you'll need this)
+**Write it down:** `192.168.1.77` (you'll need this)
 
 ---
 
@@ -85,7 +85,7 @@ Create file: `apps/mobile/.env`
 
 **Content:**
 ```bash
-EXPO_PUBLIC_API_URL=http://YOUR_IP_ADDRESS:3000/api
+EXPO_PUBLIC_API_URL=http://192.168.1.77:3000/api
 ```
 
 **Replace `YOUR_IP_ADDRESS`** with the IP you found in Step 2.
@@ -108,12 +108,12 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:3000/api
    - Name: `SoCap Web`
    - Click **Register app**
 6. Copy these 6 values:
-   - `apiKey`: `_________________`
-   - `authDomain`: `_________________`
-   - `projectId`: `_________________` (should be `my-soca-project`)
-   - `storageBucket`: `_________________`
-   - `messagingSenderId`: `_________________`
-   - `appId`: `_________________`
+   - `apiKey`: `AIzaSyCDnK3SQQ8Ndh6lnZ8brhKTCc0bC5BbCHA`
+   - `authDomain`: `my-soca-project.firebaseapp.com`
+   - `projectId`: `my-soca-project` (should be `my-soca-project`)
+   - `storageBucket`: `my-soca-project.firebasestorage.app`
+   - `messagingSenderId`: `277931500765`
+   - `appId`: `1:277931500765:web:e05010639f4fcb17556734`
 
 ---
 

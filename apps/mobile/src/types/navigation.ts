@@ -13,11 +13,16 @@ export type ContactStackParamList = {
   ImportContacts: undefined;
 };
 
+export type SettingsStackParamList = {
+  Profile: undefined;
+  NotificationPreferences: undefined;
+};
+
 export type MainTabParamList = {
   Home: undefined;
   Contacts: NavigatorScreenParams<ContactStackParamList>;
   Events: undefined;
-  Profile: undefined;
+  Profile: NavigatorScreenParams<SettingsStackParamList>;
 };
 
 export type RootStackParamList = {

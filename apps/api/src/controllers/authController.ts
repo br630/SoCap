@@ -27,6 +27,11 @@ import { FirebaseUserCreationError, FirebaseTokenError } from '../errors/firebas
  */
 export async function register(req: Request, res: Response): Promise<void> {
   try {
+    console.log('Registration request received:', {
+      email: req.body.email,
+      firstName: req.body.firstName,
+    });
+    
     // Validate input
     const validatedData: RegisterInput = registerSchema.parse(req.body);
 
@@ -54,6 +59,7 @@ export async function register(req: Request, res: Response): Promise<void> {
 
     // Create local User record
     try {
+      console.log('Creating local user for:', validatedData.email);
       const localUser = await UserService.createUser({
         email: validatedData.email,
         firstName: validatedData.firstName,
@@ -62,6 +68,7 @@ export async function register(req: Request, res: Response): Promise<void> {
         isVerified: false,
         isActive: true,
       });
+      console.log('Local user created successfully:', localUser.id);
 
       res.status(201).json({
         success: true,
@@ -75,9 +82,17 @@ export async function register(req: Request, res: Response): Promise<void> {
         },
       });
     } catch (error) {
+      console.error('Failed to create local user:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
       // If local user creation fails, clean up Firebase user
       try {
+        console.log('Cleaning up Firebase user:', firebaseUser.uid);
         await deleteFirebaseUser(firebaseUser.uid);
+        console.log('Firebase user cleaned up successfully');
       } catch (deleteError) {
         console.error('Failed to clean up Firebase user after local user creation failure:', deleteError);
       }

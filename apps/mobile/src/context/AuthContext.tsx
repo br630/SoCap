@@ -107,10 +107,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await secureStore.setItem(TOKEN_STORAGE_KEY, token);
 
           // Load user profile from backend
+          // If user doesn't exist in local DB, this will fail silently
+          // User should sign up to create account in both Firebase and local DB
           await refreshUser();
-        } catch (err) {
-          console.error('Error handling auth state change:', err);
-          await signOut();
+        } catch (err: any) {
+          // If user doesn't exist in local DB, sign them out from Firebase
+          // This forces them to sign up fresh, which creates user in both systems
+          const errorMessage = err?.message || 'Unknown error';
+          
+          if (errorMessage.includes('Failed to get user profile') || 
+              errorMessage.includes('User not found') ||
+              errorMessage.includes('404')) {
+            // User exists in Firebase but not in local DB - sign them out
+            console.log('User not found in local database. Please sign up to create account.');
+            await signOut();
+          } else if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
+            // Network errors - don't sign out, just log
+            console.warn('Network error refreshing user, will retry on next action');
+          } else {
+            console.error('Error handling auth state change:', errorMessage);
+            // Only sign out on critical auth errors
+            if (errorMessage.includes('auth') || errorMessage.includes('token')) {
+              await signOut();
+            }
+          }
         }
       } else {
         // User signed out
@@ -273,11 +293,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const refreshUser = async () => {
     try {
+      // Check if there's a Firebase user before attempting to refresh
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        // No user logged in, this is expected - don't log as error
+        return;
+      }
+
       const response = await authService.getProfile();
       await persistUser(response.user);
-    } catch (err) {
-      console.error('Error refreshing user:', err);
-      // Don't throw - user might still be authenticated
+    } catch (err: any) {
+      // Re-throw the error so the caller can handle it appropriately
+      // (e.g., sign out if user doesn't exist in local DB)
+      throw err;
     }
   };
 

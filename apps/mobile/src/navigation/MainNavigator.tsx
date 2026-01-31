@@ -9,11 +9,13 @@ import AddEditContactScreen from '../screens/contacts/AddEditContactScreen';
 import ImportContactsScreen from '../screens/contacts/ImportContactsScreen';
 import EventsScreen from '../screens/events/EventsScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
+import NotificationPreferencesScreen from '../screens/settings/NotificationPreferencesScreen';
 
-import { MainTabParamList, ContactStackParamList } from '../types/navigation';
+import { MainTabParamList, ContactStackParamList, SettingsStackParamList } from '../types/navigation';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const ContactStack = createStackNavigator<ContactStackParamList>();
+const SettingsStack = createStackNavigator<SettingsStackParamList>();
 
 // Icon component wrapper to ensure proper type
 const TabIcon = ({ icon, color }: { icon: string; color: string }) => (
@@ -83,13 +85,30 @@ export default function MainNavigator() {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileNavigator}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color }: { color: string }) => <TabIcon icon="👤" color={color} />,
+          headerShown: false,
         }}
       />
     </Tab.Navigator>
   );
 }
 
+function ProfileNavigator() {
+  return (
+    <SettingsStack.Navigator>
+      <SettingsStack.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ title: 'Profile' }}
+      />
+      <SettingsStack.Screen
+        name="NotificationPreferences"
+        component={NotificationPreferencesScreen}
+        options={{ title: 'Notification Settings' }}
+      />
+    </SettingsStack.Navigator>
+  );
+}

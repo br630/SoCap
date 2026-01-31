@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
@@ -8,8 +8,11 @@ import MainNavigator from './MainNavigator';
 
 const Stack = createStackNavigator();
 
-export default function RootNavigator() {
+const RootNavigator = forwardRef<NavigationContainerRef<any>, {}>((props, ref) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const navigationRef = useRef<NavigationContainerRef<any>>(null);
+
+  useImperativeHandle(ref, () => navigationRef.current!);
 
   if (isLoading) {
     return (
@@ -21,7 +24,10 @@ export default function RootNavigator() {
 
   // Use key to force remount when auth state changes - this avoids dynamic initialRouteName issues
   return (
-    <NavigationContainer key={isAuthenticated ? 'authenticated' : 'unauthenticated'}>
+    <NavigationContainer 
+      ref={navigationRef}
+      key={isAuthenticated ? 'authenticated' : 'unauthenticated'}
+    >
       <Stack.Navigator 
         screenOptions={{ headerShown: false }}
         initialRouteName={isAuthenticated ? 'Main' : 'Auth'}
@@ -31,7 +37,11 @@ export default function RootNavigator() {
       </Stack.Navigator>
     </NavigationContainer>
   );
-}
+});
+
+RootNavigator.displayName = 'RootNavigator';
+
+export default RootNavigator;
 
 const styles = StyleSheet.create({
   loadingContainer: {

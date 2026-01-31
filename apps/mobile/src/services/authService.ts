@@ -341,7 +341,16 @@ class AuthService {
 
       return response.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || error.message || 'Failed to get profile');
+      // Provide more specific error messages
+      if (error.response?.status === 401) {
+        throw new Error('Authentication failed. Please sign in again.');
+      } else if (error.response?.status === 404) {
+        throw new Error('User profile not found. Please contact support.');
+      } else if (error.message === 'No user logged in') {
+        throw error; // Re-throw as-is
+      } else {
+        throw new Error(error.response?.data?.message || error.message || 'Failed to get user profile');
+      }
     }
   }
 
