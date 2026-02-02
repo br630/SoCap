@@ -6,6 +6,8 @@ import authRoutes from './routes/authRoutes';
 import contactRoutes from './routes/contactRoutes';
 import eventRoutes from './routes/eventRoutes';
 import notificationRoutes from './routes/notificationRoutes';
+import reminderRoutes from './routes/reminderRoutes';
+import aiRoutes from './routes/aiRoutes';
 import { rateLimitMiddleware } from './middleware';
 
 // Load environment variables
@@ -40,6 +42,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/reminders', reminderRoutes);
+app.use('/api/ai', aiRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -68,6 +72,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📇 Contact endpoints: http://localhost:${PORT}/api/contacts`);
   console.log(`📅 Event endpoints: http://localhost:${PORT}/api/events`);
   console.log(`🔔 Notification endpoints: http://localhost:${PORT}/api/notifications`);
+  console.log(`⏰ Reminder endpoints: http://localhost:${PORT}/api/reminders`);
+  console.log(`🤖 AI endpoints: http://localhost:${PORT}/api/ai`);
 });
 
 // Start reminder cron jobs (only in production or if enabled)

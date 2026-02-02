@@ -85,19 +85,18 @@ class AuthService {
       // Create Firebase user
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const firebaseUser = userCredential.user;
-
+  
       // Get Firebase ID token
       const token = await firebaseUser.getIdToken();
-
-      // Create user in backend
+  
+      // Create user in backend - send TOKEN not password
       const response = await apiClient.post('/auth/register', {
-        email: data.email,
-        password: data.password,
+        token,  // Send the Firebase token
         firstName: data.firstName,
         lastName: data.lastName,
         timezone: data.timezone || 'UTC',
       });
-
+  
       return {
         success: true,
         user: response.data.user,
@@ -114,7 +113,7 @@ class AuthService {
         throw new Error('Password is too weak. Please use a stronger password');
       }
       if (error.message?.includes('network') || error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
-        throw new Error('Network error. Please check your internet connection and ensure the backend server is running at http://localhost:3000');
+        throw new Error('Network error. Please check your internet connection and ensure the backend server is running.');
       }
       if (error.response?.status === 409) {
         throw new Error('An account with this email already exists');
@@ -162,7 +161,7 @@ class AuthService {
         throw new Error('Too many failed attempts. Please try again later');
       }
       if (error.message?.includes('network') || error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
-        throw new Error('Network error. Please check your internet connection and ensure the backend server is running at http://localhost:3000');
+        throw new Error('Network error. Please check your internet connection and ensure the backend server is running.');
       }
       if (error.response?.status === 401) {
         throw new Error('Invalid credentials');
@@ -182,90 +181,82 @@ class AuthService {
    * 2. Copy the "Web client ID" (looks like: 277931500765-xxxxx.apps.googleusercontent.com)
    * 3. Add it to your .env file as: EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your-client-id
    */
-  async loginWithGoogle(): Promise<AuthResponse> {
-    try {
-      // Get Firebase Web Client ID from environment
-      // You can find this in Firebase Console → Project Settings → Your apps → Web app
-      const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  /**
+ * Login with Google using Expo Auth Session
+ */
+async loginWithGoogle(): Promise<AuthResponse> {
+  try {
+    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
-      if (!webClientId) {
-        throw new Error(
-          'Google Sign-In not configured. Please add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to your .env file.\n\n' +
-          'To get your Web Client ID:\n' +
-          '1. Go to Firebase Console → Project Settings → Your apps → Web app\n' +
-          '2. Copy the "Web client ID"\n' +
-          '3. Add it to apps/mobile/.env as: EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your-client-id'
-        );
-      }
+    if (!webClientId) {
+      throw new Error(
+        'Google Sign-In not configured. Please add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to your .env file.'
+      );
+    }
 
-      // Create discovery document
-      const discovery = {
-        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenEndpoint: 'https://oauth2.googleapis.com/token',
-        revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-      };
+    // Create discovery document
+    const discovery = {
+      authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+      tokenEndpoint: 'https://oauth2.googleapis.com/token',
+      revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
+    };
 
-      // Create redirect URI
-      const redirectUri = AuthSession.makeRedirectUri({
-        scheme: 'com.socap.app',
-        useProxy: true,
-      });
+    // Create redirect URI
+    const redirectUri = AuthSession.makeRedirectUri({
+      scheme: 'com.socap.app',
+    });
 
-      // Create auth request
-      const request = new AuthSession.AuthRequest({
-        clientId: webClientId,
-        scopes: ['openid', 'profile', 'email'],
-        responseType: AuthSession.ResponseType.IdToken,
-        redirectUri,
-        additionalParameters: {},
-        extraParams: {},
-      });
+    // Create auth request - removed invalid properties
+    const request = new AuthSession.AuthRequest({
+      clientId: webClientId,
+      scopes: ['openid', 'profile', 'email'],
+      responseType: AuthSession.ResponseType.IdToken,
+      redirectUri,
+    });
 
-      // Prompt for authentication
-      const result = await request.promptAsync(discovery);
+    // Prompt for authentication
+    const result = await request.promptAsync(discovery);
 
-      if (result.type !== 'success') {
-        if (result.type === 'cancel') {
-          throw new Error('Google Sign-In was cancelled');
-        }
-        throw new Error('Google Sign-In failed. Please try again.');
-      }
-
-      // Get the ID token from the result
-      const { id_token } = result.params;
-      if (!id_token) {
-        throw new Error('No ID token received from Google');
-      }
-
-      // Create Firebase credential
-      const credential = GoogleAuthProvider.credential(id_token);
-      
-      // Sign in to Firebase
-      const userCredential = await signInWithCredential(auth, credential);
-      const firebaseUser = userCredential.user;
-
-      // Get Firebase ID token
-      const token = await firebaseUser.getIdToken();
-
-      // Login to backend
-      const response = await apiClient.post('/auth/google', { token });
-
-      return {
-        success: true,
-        user: response.data.user,
-      };
-    } catch (error: any) {
-      // Provide more helpful error messages
-      if (error.message?.includes('cancelled') || error.message?.includes('cancel')) {
+    if (result.type !== 'success') {
+      if (result.type === 'cancel') {
         throw new Error('Google Sign-In was cancelled');
       }
-      if (error.message?.includes('network') || error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
-        throw new Error('Network error. Please check your internet connection and ensure the backend server is running at http://localhost:3000');
-      }
-      throw new Error(error.response?.data?.message || error.message || 'Google login failed');
+      throw new Error('Google Sign-In failed. Please try again.');
     }
-  }
 
+    // Get the ID token from the result
+    const { id_token } = result.params;
+    if (!id_token) {
+      throw new Error('No ID token received from Google');
+    }
+
+    // Create Firebase credential
+    const credential = GoogleAuthProvider.credential(id_token);
+    
+    // Sign in to Firebase
+    const userCredential = await signInWithCredential(auth, credential);
+    const firebaseUser = userCredential.user;
+
+    // Get Firebase ID token
+    const token = await firebaseUser.getIdToken();
+
+    // Login to backend
+    const response = await apiClient.post('/auth/google', { token });
+
+    return {
+      success: true,
+      user: response.data.user,
+    };
+  } catch (error: any) {
+    if (error.message?.includes('cancelled') || error.message?.includes('cancel')) {
+      throw new Error('Google Sign-In was cancelled');
+    }
+    if (error.message?.includes('network') || error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+    throw new Error(error.response?.data?.message || error.message || 'Google login failed');
+  }
+}
   /**
    * Login with Apple
    * Note: Requires @invertase/react-native-apple-authentication package (iOS only)
@@ -444,3 +435,4 @@ class AuthService {
 }
 
 export const authService = new AuthService();
+export default authService;

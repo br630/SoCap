@@ -4,10 +4,9 @@ import { z } from 'zod';
  * Register validation schema
  */
 export const registerSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  firstName: z.string().min(1, 'First name is required').max(100, 'First name is too long'),
-  lastName: z.string().min(1, 'Last name is required').max(100, 'Last name is too long'),
+  token: z.string().min(1, 'Token is required'),
+  firstName: z.string().min(2).max(50),
+  lastName: z.string().min(2).max(50),
   timezone: z.string().optional().default('UTC'),
 });
 

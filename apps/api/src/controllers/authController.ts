@@ -27,96 +27,62 @@ import { FirebaseUserCreationError, FirebaseTokenError } from '../errors/firebas
  */
 export async function register(req: Request, res: Response): Promise<void> {
   try {
-    console.log('Registration request received:', {
-      email: req.body.email,
-      firstName: req.body.firstName,
-    });
-    
-    // Validate input
-    const validatedData: RegisterInput = registerSchema.parse(req.body);
+    // Expect token from mobile (Firebase user already created by mobile)
+    const { token, firstName, lastName, timezone } = req.body;
 
-    // Create Firebase user
-    let firebaseUser;
-    try {
-      firebaseUser = await createFirebaseUser(
-        validatedData.email,
-        validatedData.password,
-        {
-          displayName: `${validatedData.firstName} ${validatedData.lastName}`,
-          emailVerified: false,
-        }
-      );
-    } catch (error) {
-      if (error instanceof FirebaseUserCreationError) {
-        res.status(400).json({
-          error: 'Registration failed',
-          message: error.message,
-        });
-        return;
-      }
-      throw error;
-    }
-
-    // Create local User record
-    try {
-      console.log('Creating local user for:', validatedData.email);
-      const localUser = await UserService.createUser({
-        email: validatedData.email,
-        firstName: validatedData.firstName,
-        lastName: validatedData.lastName,
-        timezone: validatedData.timezone,
-        isVerified: false,
-        isActive: true,
-      });
-      console.log('Local user created successfully:', localUser.id);
-
-      res.status(201).json({
-        success: true,
-        message: 'User registered successfully',
-        user: {
-          id: localUser.id,
-          email: localUser.email,
-          firstName: localUser.firstName,
-          lastName: localUser.lastName,
-          firebaseUid: firebaseUser.uid,
-        },
-      });
-    } catch (error) {
-      console.error('Failed to create local user:', error);
-      console.error('Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-
-      // If local user creation fails, clean up Firebase user
-      try {
-        console.log('Cleaning up Firebase user:', firebaseUser.uid);
-        await deleteFirebaseUser(firebaseUser.uid);
-        console.log('Firebase user cleaned up successfully');
-      } catch (deleteError) {
-        console.error('Failed to clean up Firebase user after local user creation failure:', deleteError);
-      }
-
-      if (error instanceof Error && error.message.includes('already exists')) {
-        res.status(409).json({
-          error: 'Registration failed',
-          message: 'User with this email already exists',
-        });
-        return;
-      }
-
-      throw error;
-    }
-  } catch (error) {
-    if (error instanceof z.ZodError) {
+    if (!token) {
       res.status(400).json({
         error: 'Validation failed',
-        message: 'Invalid input data',
-        details: error.issues,
+        message: 'Firebase token is required',
       });
       return;
     }
 
+    // Verify the Firebase token
+    let decodedToken;
+    try {
+      decodedToken = await verifyIdToken(token);
+    } catch (error) {
+      res.status(401).json({
+        error: 'Authentication failed',
+        message: 'Invalid Firebase token',
+      });
+      return;
+    }
+
+    // Check if user already exists in local DB
+    const existingUser = await UserService.getUserByEmail(decodedToken.email || '');
+    if (existingUser) {
+      res.status(409).json({
+        error: 'Registration failed',
+        message: 'User with this email already exists',
+      });
+      return;
+    }
+
+    // Create local user record (Firebase user already exists)
+    const localUser = await UserService.createUser({
+      email: decodedToken.email || '',
+      firstName: firstName || decodedToken.name?.split(' ')[0] || 'User',
+      lastName: lastName || decodedToken.name?.split(' ').slice(1).join(' ') || '',
+      timezone: timezone || 'UTC',
+      isVerified: decodedToken.email_verified || false,
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'User registered successfully',
+      user: {
+        id: localUser.id,
+        email: localUser.email,
+        firstName: localUser.firstName,
+        lastName: localUser.lastName,
+        timezone: localUser.timezone,
+        isVerified: localUser.isVerified,
+      },
+    });
+  } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({
       error: 'Internal Server Error',
@@ -131,10 +97,8 @@ export async function register(req: Request, res: Response): Promise<void> {
  */
 export async function login(req: Request, res: Response): Promise<void> {
   try {
-    // Validate input
     const validatedData: LoginInput = loginSchema.parse(req.body);
 
-    // Verify Firebase token
     let decodedToken;
     try {
       decodedToken = await verifyIdToken(validatedData.token);
@@ -149,24 +113,17 @@ export async function login(req: Request, res: Response): Promise<void> {
       throw error;
     }
 
-    // Get or create local User record
-    let localUser = await UserService.getUserByEmail(decodedToken.email || '');
+    // Get local user - DON'T auto-create
+    const localUser = await UserService.getUserByEmail(decodedToken.email || '');
 
     if (!localUser) {
-      // Create local user if doesn't exist
-      const displayName = decodedToken.name || '';
-      const nameParts = displayName.split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
-
-      localUser = await UserService.createUser({
-        email: decodedToken.email || '',
-        firstName: firstName || 'User',
-        lastName: lastName || '',
-        profileImage: decodedToken.picture,
-        isVerified: decodedToken.email_verified || false,
-        isActive: true,
+      // User exists in Firebase but not in local DB
+      // This means registration didn't complete properly
+      res.status(404).json({
+        error: 'User not found',
+        message: 'Please complete registration first',
       });
+      return;
     }
 
     res.json({

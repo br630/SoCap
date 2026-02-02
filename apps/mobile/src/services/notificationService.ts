@@ -8,6 +8,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -144,8 +146,12 @@ class NotificationService {
 
     // Return cleanup function
     return () => {
-      Notifications.removeNotificationSubscription(receivedListener);
-      Notifications.removeNotificationSubscription(responseListener);
+      if (receivedListener) {
+        receivedListener.remove();
+      }
+      if (responseListener) {
+        responseListener.remove();
+      }
     };
   }
 
@@ -210,7 +216,7 @@ class NotificationService {
         body: 'This is a test notification from SoCap',
         data: { type: 'test' },
       },
-      trigger: { seconds: 2 },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 },
     });
   }
 

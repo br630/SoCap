@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Linking, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Linking, Alert, Modal, TouchableOpacity } from 'react-native';
 import {
   Avatar,
   Text,
@@ -18,6 +18,9 @@ import { useContact, useInteractionHistory } from '../../hooks/useContact';
 import QuickActionButton from '../../components/contacts/QuickActionButton';
 import TierBadge from '../../components/contacts/TierBadge';
 import InteractionItem from '../../components/contacts/InteractionItem';
+import { MessageSuggestionCard, ConversationStarterList } from '../../components/ai';
+import { useContactAI } from '../../hooks/useAISuggestions';
+import { MessageContext } from '../../services/aiService';
 
 export default function ContactDetailScreen() {
   const route = useRoute();
@@ -25,11 +28,25 @@ export default function ContactDetailScreen() {
   const { id } = (route.params as { id: string }) || {};
   const [showRelationshipDialog, setShowRelationshipDialog] = useState(false);
   const [showInteractionDialog, setShowInteractionDialog] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiTab, setAITab] = useState<'messages' | 'starters'>('messages');
+  const [messageContext, setMessageContext] = useState<MessageContext>('check-in');
   const [interactionType, setInteractionType] = useState<'CALL' | 'TEXT' | 'VIDEO_CALL' | 'IN_PERSON' | 'EVENT'>('CALL');
   const [interactionNotes, setInteractionNotes] = useState('');
 
   const { contact, isLoading, updateRelationship, logInteraction, isLoggingInteraction } = useContact(id);
   const { interactions } = useInteractionHistory(id, 1, 10);
+  
+  // AI hooks
+  const {
+    messageSuggestions,
+    isLoadingMessages,
+    fetchMessageSuggestions,
+    conversationStarters,
+    isLoadingStarters,
+    fetchConversationStarters,
+    submitFeedback,
+  } = useContactAI(id);
 
   if (isLoading) {
     return (
@@ -86,6 +103,38 @@ export default function ContactDetailScreen() {
     navigation.navigate('AddEditContact' as never, { contactId: id } as never);
   };
 
+  const handleOpenAI = async () => {
+    setShowAIModal(true);
+    // Fetch message suggestions when opening
+    try {
+      await fetchMessageSuggestions(messageContext);
+    } catch (error) {
+      console.log('Error fetching suggestions:', error);
+    }
+  };
+
+  const handleRefreshMessages = async () => {
+    try {
+      await fetchMessageSuggestions(messageContext);
+    } catch (error) {
+      console.log('Error refreshing messages:', error);
+    }
+  };
+
+  const handleRefreshStarters = async () => {
+    try {
+      await fetchConversationStarters();
+    } catch (error) {
+      console.log('Error refreshing starters:', error);
+    }
+  };
+
+  const handleFeedback = (insightId: string, wasUsed: boolean, feedback?: string) => {
+    if (insightId) {
+      submitFeedback({ insightId, wasUsed, feedback });
+    }
+  };
+
   const handleLogInteraction = () => {
     logInteraction({
       type: interactionType,
@@ -123,6 +172,16 @@ export default function ContactDetailScreen() {
         <QuickActionButton icon="email" label="Email" onPress={handleEmail} color="#FF9800" />
         <QuickActionButton icon="calendar" label="Event" onPress={handlePlanEvent} color="#9C27B0" />
       </View>
+
+      {/* AI Message Ideas Button */}
+      <TouchableOpacity style={styles.aiButton} onPress={handleOpenAI}>
+        <Text style={styles.aiButtonIcon}>✨</Text>
+        <View style={styles.aiButtonText}>
+          <Text style={styles.aiButtonTitle}>Get AI Ideas</Text>
+          <Text style={styles.aiButtonSubtitle}>Message suggestions & conversation starters</Text>
+        </View>
+        <Text style={styles.aiButtonArrow}>›</Text>
+      </TouchableOpacity>
 
       <Divider style={styles.divider} />
 
@@ -285,6 +344,92 @@ export default function ContactDetailScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      {/* AI Modal */}
+      <Modal
+        visible={showAIModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAIModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>✨ AI Ideas for {contact?.name}</Text>
+            <TouchableOpacity onPress={() => setShowAIModal(false)}>
+              <Text style={styles.modalClose}>Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Tab Switcher */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, aiTab === 'messages' && styles.tabActive]}
+              onPress={() => {
+                setAITab('messages');
+                if (!messageSuggestions) handleRefreshMessages();
+              }}
+            >
+              <Text style={[styles.tabText, aiTab === 'messages' && styles.tabTextActive]}>
+                Messages
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, aiTab === 'starters' && styles.tabActive]}
+              onPress={() => {
+                setAITab('starters');
+                if (!conversationStarters) handleRefreshStarters();
+              }}
+            >
+              <Text style={[styles.tabText, aiTab === 'starters' && styles.tabTextActive]}>
+                Conversation Starters
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Context Selector for Messages */}
+          {aiTab === 'messages' && (
+            <View style={styles.contextSelector}>
+              <Text style={styles.contextLabel}>Context:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {(['check-in', 'birthday', 'congratulations', 'reconnect', 'thank-you'] as MessageContext[]).map((ctx) => (
+                  <TouchableOpacity
+                    key={ctx}
+                    style={[styles.contextChip, messageContext === ctx && styles.contextChipActive]}
+                    onPress={() => {
+                      setMessageContext(ctx);
+                      fetchMessageSuggestions(ctx);
+                    }}
+                  >
+                    <Text style={[styles.contextChipText, messageContext === ctx && styles.contextChipTextActive]}>
+                      {ctx.replace('-', ' ')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          <ScrollView style={styles.modalContent}>
+            {aiTab === 'messages' ? (
+              <MessageSuggestionCard
+                suggestions={messageSuggestions?.suggestions || null}
+                contactName={contact?.name}
+                isLoading={isLoadingMessages}
+                insightId={messageSuggestions?.insightId}
+                onFeedback={handleFeedback}
+                onRefresh={handleRefreshMessages}
+              />
+            ) : (
+              <ConversationStarterList
+                starters={conversationStarters?.starters || null}
+                contactName={contact?.name}
+                isLoading={isLoadingStarters}
+                onRefresh={handleRefreshStarters}
+              />
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -367,5 +512,124 @@ const styles = StyleSheet.create({
   },
   input: {
     marginTop: 16,
+  },
+  aiButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#7C4DFF20',
+  },
+  aiButtonIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  aiButtonText: {
+    flex: 1,
+  },
+  aiButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#7C4DFF',
+  },
+  aiButtonSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  aiButtonArrow: {
+    fontSize: 24,
+    color: '#7C4DFF',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  modalClose: {
+    fontSize: 16,
+    color: '#7C4DFF',
+    fontWeight: '600',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: '#7C4DFF',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: '#7C4DFF',
+    fontWeight: '600',
+  },
+  contextSelector: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  contextLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+  },
+  contextChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    marginRight: 8,
+  },
+  contextChipActive: {
+    backgroundColor: '#7C4DFF',
+  },
+  contextChipText: {
+    fontSize: 13,
+    color: '#666',
+    textTransform: 'capitalize',
+  },
+  contextChipTextActive: {
+    color: '#fff',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
   },
 });

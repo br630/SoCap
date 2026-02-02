@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,25 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import eventService, { Event } from '../../services/eventService';
 
 export default function EventsScreen() {
+  const navigation = useNavigation();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity 
+          style={{ marginRight: 16 }}
+          onPress={() => navigation.navigate('AddEditEvent' as never)}
+        >
+          <Ionicons name="add-circle" size={28} color="#7C4DFF" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -104,10 +120,17 @@ export default function EventsScreen() {
     <View style={styles.container}>
       {events.length === 0 ? (
         <View style={styles.emptyContainer}>
+          <Ionicons name="calendar-outline" size={64} color="#ccc" />
           <Text style={styles.emptyText}>No upcoming events</Text>
           <Text style={styles.emptySubtext}>
             Create your first event to get started
           </Text>
+          <TouchableOpacity 
+            style={styles.createButton}
+            onPress={() => navigation.navigate('AddEditEvent' as never)}
+          >
+            <Text style={styles.createButtonText}>Create Event</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -218,5 +241,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+  },
+  createButton: {
+    marginTop: 20,
+    backgroundColor: '#7C4DFF',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  createButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

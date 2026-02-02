@@ -8,14 +8,21 @@ import ContactDetailScreen from '../screens/contacts/ContactDetailScreen';
 import AddEditContactScreen from '../screens/contacts/AddEditContactScreen';
 import ImportContactsScreen from '../screens/contacts/ImportContactsScreen';
 import EventsScreen from '../screens/events/EventsScreen';
+import AddEditEventScreen from '../screens/events/AddEditEventScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import NotificationPreferencesScreen from '../screens/settings/NotificationPreferencesScreen';
 
 import { MainTabParamList, ContactStackParamList, SettingsStackParamList } from '../types/navigation';
 
+type EventStackParamList = {
+  EventList: undefined;
+  AddEditEvent: { contactId?: string };
+};
+
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const ContactStack = createStackNavigator<ContactStackParamList>();
 const SettingsStack = createStackNavigator<SettingsStackParamList>();
+const EventStack = createStackNavigator<EventStackParamList>();
 
 // Icon component wrapper to ensure proper type
 const TabIcon = ({ icon, color }: { icon: string; color: string }) => (
@@ -49,6 +56,23 @@ function ContactNavigator() {
   );
 }
 
+function EventNavigator() {
+  return (
+    <EventStack.Navigator>
+      <EventStack.Screen
+        name="EventList"
+        component={EventsScreen}
+        options={{ title: 'Events' }}
+      />
+      <EventStack.Screen
+        name="AddEditEvent"
+        component={AddEditEventScreen}
+        options={{ title: 'Create Event' }}
+      />
+    </EventStack.Navigator>
+  );
+}
+
 export default function MainNavigator() {
   return (
     <Tab.Navigator
@@ -77,10 +101,11 @@ export default function MainNavigator() {
       />
       <Tab.Screen
         name="Events"
-        component={EventsScreen}
+        component={EventNavigator}
         options={{
           tabBarLabel: 'Events',
           tabBarIcon: ({ color }: { color: string }) => <TabIcon icon="📅" color={color} />,
+          headerShown: false,
         }}
       />
       <Tab.Screen

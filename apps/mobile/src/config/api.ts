@@ -6,13 +6,23 @@ import { Platform } from 'react-native';
 // iOS simulator can use localhost directly
 // Physical devices need your computer's IP address (e.g., http://192.168.1.77:3000/api)
 const getDefaultApiUrl = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+  // For Android, always use emulator address (10.0.2.2) when running in emulator
+  // Check if we're in an emulator by checking if we can detect it
+  if (Platform.OS === 'android') {
+    // Android emulator - use 10.0.2.2 to access host machine's localhost
+    // Only use EXPO_PUBLIC_API_URL if explicitly set for physical device testing
+    const envUrl = process.env.EXPO_PUBLIC_API_URL;
+    // If env URL contains localhost or 192.168.x.x, it's likely for physical device
+    // For emulator, always use 10.0.2.2
+    if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('192.168.')) {
+      return envUrl;
+    }
+    return 'http://10.0.2.2:3000/api';
   }
   
-  if (Platform.OS === 'android') {
-    // Android emulator
-    return 'http://10.0.2.2:3000/api';
+  // For iOS or web, use env var if set, otherwise localhost
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
   
   // iOS simulator or web
@@ -20,6 +30,10 @@ const getDefaultApiUrl = () => {
 };
 
 const API_BASE_URL = getDefaultApiUrl();
+
+// Debug: Log the API URL being used
+console.log('🔗 API Base URL:', API_BASE_URL);
+console.log('📱 Platform:', Platform.OS);
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
