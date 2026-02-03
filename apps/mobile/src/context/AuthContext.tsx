@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import * as SecureStore from 'expo-secure-store';
 import { authService, User } from '../services/authService';
 import { setTokenGetter } from '../config/api';
+import tokenService from '../services/tokenService';
+import sessionService from '../services/sessionService';
+import secureStorage from '../services/secureStorage';
 
 interface AuthContextType {
   user: User | null;
@@ -85,12 +88,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Set up token getter for API client
+  // Set up token getter for API client (uses token service for auto-refresh)
   useEffect(() => {
     setTokenGetter(async () => {
-      return secureStore.getItem(TOKEN_STORAGE_KEY);
+      return await tokenService.getAccessToken();
     });
   }, []);
+
+  // Start token refresh listener
+  useEffect(() => {
+    if (user) {
+      const cleanup = tokenService.startTokenRefreshListener();
+      return cleanup;
+    }
+  }, [user]);
+
+  // Initialize session management
+  useEffect(() => {
+    if (user) {
+      sessionService.initialize(() => {
+        // Session expired - sign out
+        signOut();
+      });
+      sessionService.resetSession();
+
+      return () => {
+        sessionService.clearSession();
+      };
+    }
+  }, [user]);
 
   // Load persisted auth state on mount
   useEffect(() => {
@@ -102,9 +128,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         try {
-          // Get fresh token
+          // Get fresh token and store using token service
           const token = await firebaseUser.getIdToken();
-          await secureStore.setItem(TOKEN_STORAGE_KEY, token);
+          await tokenService.storeTokens(token, undefined, 3600); // 1 hour expiry
 
           // Load user profile from backend
           // If user doesn't exist in local DB, this will fail silently
@@ -133,10 +159,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } else {
-        // User signed out
+        // User signed out - clear all secure storage
         setUser(null);
-        await secureStore.deleteItem(TOKEN_STORAGE_KEY);
-        await secureStore.deleteItem(AUTH_STORAGE_KEY);
+        await tokenService.clearTokens();
+        await secureStorage.clearAll();
+        await sessionService.clearSession();
       }
       setIsLoading(false);
     });
@@ -144,24 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  // Auto-refresh token every 50 minutes (tokens expire after 1 hour)
-  useEffect(() => {
-    if (!user) return;
-
-    const refreshInterval = setInterval(async () => {
-      try {
-        const firebaseUser = auth.currentUser;
-        if (firebaseUser) {
-          const token = await firebaseUser.getIdToken(true); // Force refresh
-          await secureStore.setItem(TOKEN_STORAGE_KEY, token);
-        }
-      } catch (err) {
-        console.error('Error refreshing token:', err);
-      }
-    }, 50 * 60 * 1000); // 50 minutes
-
-    return () => clearInterval(refreshInterval);
-  }, [user]);
+  // Token refresh is now handled by tokenService.startTokenRefreshListener()
 
   /**
    * Load persisted auth state from SecureStore
@@ -241,8 +251,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       await authService.logout();
       setUser(null);
-      await secureStore.deleteItem(TOKEN_STORAGE_KEY);
-      await secureStore.deleteItem(AUTH_STORAGE_KEY);
+      // Clear all secure storage
+      await tokenService.clearTokens();
+      await secureStorage.clearAll();
+      await sessionService.clearSession();
     } catch (err: any) {
       const errorMessage = err.message || 'Sign out failed';
       setError(errorMessage);

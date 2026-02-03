@@ -11,6 +11,9 @@ import EventsScreen from '../screens/events/EventsScreen';
 import AddEditEventScreen from '../screens/events/AddEditEventScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import NotificationPreferencesScreen from '../screens/settings/NotificationPreferencesScreen';
+import CalendarSettingsScreen from '../screens/settings/CalendarSettingsScreen';
+import SecuritySettingsScreen from '../screens/settings/SecuritySettingsScreen';
+import InsightsScreen from '../screens/insights/InsightsScreen';
 
 import { MainTabParamList, ContactStackParamList, SettingsStackParamList } from '../types/navigation';
 
@@ -133,6 +136,21 @@ function ProfileNavigator() {
         name="NotificationPreferences"
         component={NotificationPreferencesScreen}
         options={{ title: 'Notification Settings' }}
+      />
+      <SettingsStack.Screen
+        name="CalendarSettings"
+        component={CalendarSettingsScreen}
+        options={{ title: 'Calendar Settings' }}
+      />
+      <SettingsStack.Screen
+        name="SecuritySettings"
+        component={SecuritySettingsScreen}
+        options={{ title: 'Security Settings' }}
+      />
+      <SettingsStack.Screen
+        name="Insights"
+        component={InsightsScreen}
+        options={{ title: 'Insights & Analytics' }}
       />
     </SettingsStack.Navigator>
   );

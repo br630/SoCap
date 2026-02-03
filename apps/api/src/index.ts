@@ -1,33 +1,67 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import morgan from 'morgan';
 import authRoutes from './routes/authRoutes';
 import contactRoutes from './routes/contactRoutes';
 import eventRoutes from './routes/eventRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import reminderRoutes from './routes/reminderRoutes';
 import aiRoutes from './routes/aiRoutes';
-import { rateLimitMiddleware } from './middleware';
+import calendarRoutes from './routes/calendarRoutes';
+import dashboardRoutes from './routes/dashboardRoutes';
+import securityRoutes from './routes/securityRoutes';
+import {
+  securityMiddleware,
+  additionalSecurityHeaders,
+  apiRateLimiter,
+  authRateLimiter,
+  errorHandler,
+  notFoundHandler,
+  requestLogger,
+} from './middleware';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isDevelopment = process.env.NODE_ENV === 'development';
 
-// Middleware
-app.use(cors({
-  origin: true, // Allow all origins in development
-  credentials: true, // Allow credentials (cookies, authorization headers)
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-app.use(express.json());
-app.use(morgan('dev')); // Logging
+// Security middleware (must be first)
+app.use(securityMiddleware());
+app.use(additionalSecurityHeaders);
+
+// CORS configuration
+const allowedOrigins = isDevelopment
+  ? true // Allow all origins in development
+  : (process.env.ALLOWED_ORIGINS?.split(',') || []);
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: [
+      'X-RateLimit-Limit',
+      'X-RateLimit-Remaining',
+      'X-RateLimit-Reset',
+      'X-RateLimit-Limit-IP',
+      'X-RateLimit-Remaining-IP',
+      'X-RateLimit-Reset-IP',
+    ],
+  })
+);
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request logging with sensitive data redaction
+app.use(requestLogger);
 
 // Apply rate limiting globally
-app.use(rateLimitMiddleware());
+app.use(apiRateLimiter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -38,29 +72,22 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth', authRoutes);
+// Auth routes with stricter rate limiting
+app.use('/api/auth', authRateLimiter, authRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/calendar', calendarRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/security', securityRoutes);
 
 // 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Not Found',
-    message: `Route ${req.method} ${req.path} not found`,
-  });
-});
+app.use(notFoundHandler);
 
-// Error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'An error occurred',
-  });
-});
+// Error handler (must be last)
+app.use(errorHandler);
 
 // Start server
 // Listen on 0.0.0.0 to accept connections from network (for mobile devices)
@@ -73,7 +100,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📅 Event endpoints: http://localhost:${PORT}/api/events`);
   console.log(`🔔 Notification endpoints: http://localhost:${PORT}/api/notifications`);
   console.log(`⏰ Reminder endpoints: http://localhost:${PORT}/api/reminders`);
-  console.log(`🤖 AI endpoints: http://localhost:${PORT}/api/ai`);
+    console.log(`🤖 AI endpoints: http://localhost:${PORT}/api/ai`);
+    console.log(`📆 Calendar endpoints: http://localhost:${PORT}/api/calendar`);
+    console.log(`📊 Dashboard endpoints: http://localhost:${PORT}/api/dashboard`);
 });
 
 // Start reminder cron jobs (only in production or if enabled)

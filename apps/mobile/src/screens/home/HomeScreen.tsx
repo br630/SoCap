@@ -1,196 +1,260 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator } from 'react-native-paper';
+import { Text, Card, ActivityIndicator, Divider } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
-import contactService from '../../services/contactService';
-import eventService from '../../services/eventService';
-import { RelationshipTipCard } from '../../components/ai';
-import { useRelationshipTip } from '../../hooks/useAISuggestions';
+import { useDashboard } from '../../hooks/useDashboard';
+import {
+  HealthScoreCard,
+  ReminderMiniCard,
+  QuickActionButton,
+  ContactAvatarScroll,
+  MiniEventCard,
+  TipCard,
+} from '../../components/dashboard';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState({
-    totalContacts: 0,
-    upcomingEvents: 0,
-  });
-  
-  // AI Relationship Tip
-  const { data: tipData, isLoading: tipLoading, refetch: refetchTip } = useRelationshipTip();
+  const { data: dashboardData, isLoading, refetch, isRefetching } = useDashboard();
 
-  const loadStats = useCallback(async () => {
-    try {
-      const [contactsResponse, eventsResponse] = await Promise.all([
-        contactService.getContacts({}, { page: 1, limit: 1 }),
-        eventService.getEvents(
-          {
-            dateFrom: new Date().toISOString(),
-            status: 'CONFIRMED',
-          },
-          1,
-          1
-        ),
-      ]);
+  const handleRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
-      setStats({
-        totalContacts: contactsResponse.pagination.total,
-        upcomingEvents: eventsResponse.pagination.total,
-      });
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadStats();
-    }, [loadStats])
-  );
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadStats();
-    refetchTip();
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   };
 
-  const navigateToAddContact = () => {
+  const formatDate = () => {
+    return new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  const navigateToContact = (contactId: string) => {
     navigation.navigate('Contacts' as never, {
-      screen: 'AddEditContact',
-      params: {},
+      screen: 'ContactDetail',
+      params: { id: contactId },
     } as never);
   };
 
-  const navigateToCreateEvent = () => {
+  const navigateToEvent = (eventId: string) => {
     navigation.navigate('Events' as never, {
-      screen: 'AddEditEvent',
-      params: {},
+      screen: 'EventDetail',
+      params: { id: eventId },
     } as never);
   };
 
-  const navigateToContacts = () => {
-    navigation.navigate('Contacts' as never);
+  const navigateToReminders = () => {
+    navigation.navigate('Reminders' as never);
   };
 
-  const navigateToEvents = () => {
-    navigation.navigate('Events' as never);
+  const navigateToInsights = () => {
+    // Will be implemented when InsightsScreen is created
+    navigation.navigate('Profile' as never, {
+      screen: 'Insights',
+    } as never);
   };
 
-  if (loading) {
+  const navigateToSavings = () => {
+    // Navigate to savings goals screen
+    navigation.navigate('Profile' as never);
+  };
+
+  if (isLoading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#6200ee" />
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading dashboard...</Text>
       </View>
     );
   }
+
+  const data = dashboardData || {
+    healthScore: 0,
+    healthScoreTrend: 0,
+    todayReminders: [],
+    upcomingEvents: [],
+    contactsNeedingAttention: [],
+    savingsSummary: { totalSaved: 0, activeGoals: 0, nearestDeadline: null },
+    tipOfTheDay: 'Start building meaningful relationships today!',
+  };
 
   return (
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} />
       }
     >
-      <View style={styles.header}>
+      {/* Greeting Section */}
+      <View style={styles.greetingSection}>
         <Text style={styles.greeting}>
-          Welcome back, {user?.firstName || 'User'}! 👋
+          {getGreeting()}, {user?.firstName || 'there'}! 👋
         </Text>
+        <Text style={styles.date}>{formatDate()}</Text>
       </View>
 
-      {/* Stats Cards */}
-      <View style={styles.statsContainer}>
-        <TouchableOpacity style={styles.statCard} onPress={navigateToContacts}>
-          <Text style={styles.statNumber}>{stats.totalContacts}</Text>
-          <Text style={styles.statLabel}>Total Contacts</Text>
-        </TouchableOpacity>
+      {/* Health Score Card */}
+      <HealthScoreCard
+        score={data.healthScore}
+        trend={data.healthScoreTrend}
+        onPress={navigateToInsights}
+      />
 
-        <TouchableOpacity style={styles.statCard} onPress={navigateToEvents}>
-          <Text style={styles.statNumber}>{stats.upcomingEvents}</Text>
-          <Text style={styles.statLabel}>Upcoming Events</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Today's Reminders Card */}
+      {data.todayReminders.length > 0 && (
+        <Card style={styles.sectionCard}>
+          <Card.Content>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Today's Reminders</Text>
+              <TouchableOpacity onPress={navigateToReminders}>
+                <Text style={styles.seeAllText}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            {data.todayReminders.slice(0, 3).map((reminder) => (
+              <ReminderMiniCard
+                key={reminder.id}
+                reminder={reminder}
+                onPress={() => {
+                  if (reminder.contact?.id) {
+                    navigateToContact(reminder.contact.id);
+                  } else if (reminder.event?.id) {
+                    navigateToEvent(reminder.event.id);
+                  }
+                }}
+              />
+            ))}
+          </Card.Content>
+        </Card>
+      )}
 
-      {/* AI Relationship Tip */}
-      <View style={styles.section}>
-        <RelationshipTipCard
-          tip={tipData?.tip || null}
-          isLoading={tipLoading}
-          onRefresh={() => refetchTip()}
+      {/* Quick Actions Row */}
+      <View style={styles.quickActionsContainer}>
+        <QuickActionButton
+          icon="chatbubble-ellipses-outline"
+          label="Log Interaction"
+          onPress={() => {
+            navigation.navigate('Contacts' as never);
+          }}
+          color="#007AFF"
+        />
+        <QuickActionButton
+          icon="calendar-outline"
+          label="Plan Event"
+          onPress={() => {
+            navigation.navigate('Events' as never, {
+              screen: 'CreateEvent',
+            } as never);
+          }}
+          color="#4CAF50"
+        />
+        <QuickActionButton
+          icon="wallet-outline"
+          label="Add Savings"
+          onPress={navigateToSavings}
+          color="#FF9800"
+        />
+        <QuickActionButton
+          icon="person-add-outline"
+          label="Reach Out"
+          onPress={() => {
+            navigation.navigate('Contacts' as never);
+          }}
+          color="#9C27B0"
         />
       </View>
 
-      {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        
-        <TouchableOpacity style={styles.actionCard} onPress={navigateToAddContact}>
-          <View style={styles.actionContent}>
-            <Text style={styles.actionIcon}>📇</Text>
-            <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>Add New Contact</Text>
-              <Text style={styles.actionSubtitle}>Start tracking a relationship</Text>
-            </View>
-            <Text style={styles.actionArrow}>›</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionCard} onPress={navigateToCreateEvent}>
-          <View style={styles.actionContent}>
-            <Text style={styles.actionIcon}>📅</Text>
-            <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>Create Event</Text>
-              <Text style={styles.actionSubtitle}>Plan a meetup or gathering</Text>
-            </View>
-            <Text style={styles.actionArrow}>›</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.actionCard} 
-          onPress={() => navigation.navigate('Contacts' as never)}
-        >
-          <View style={styles.actionContent}>
-            <Text style={styles.actionIcon}>💬</Text>
-            <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>Get AI Message Suggestions</Text>
-              <Text style={styles.actionSubtitle}>Select a contact to get started</Text>
-            </View>
-            <Text style={styles.actionArrow}>›</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* Empty State / Getting Started */}
-      {stats.totalContacts === 0 && (
+      {/* Contacts Needing Attention */}
+      {data.contactsNeedingAttention.length > 0 && (
         <View style={styles.section}>
-          <Card style={styles.gettingStartedCard}>
-            <Card.Content>
-              <Text style={styles.gettingStartedTitle}>🚀 Getting Started</Text>
-              <Text style={styles.gettingStartedText}>
-                Add your first contact to start building and nurturing your relationships!
-              </Text>
-              <TouchableOpacity
-                style={styles.gettingStartedButton}
-                onPress={navigateToAddContact}
-              >
-                <Text style={styles.gettingStartedButtonText}>Add First Contact</Text>
-              </TouchableOpacity>
-            </Card.Content>
-          </Card>
+          <Text style={styles.sectionTitle}>Contacts Needing Attention</Text>
+          <ContactAvatarScroll
+            contacts={data.contactsNeedingAttention}
+            onContactPress={navigateToContact}
+          />
         </View>
       )}
+
+      {/* Upcoming Events */}
+      {data.upcomingEvents.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Upcoming Events</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Events' as never)}
+            >
+              <Text style={styles.seeAllText}>See All</Text>
+            </TouchableOpacity>
+          </View>
+          {data.upcomingEvents.slice(0, 3).map((event) => (
+            <MiniEventCard
+              key={event.id}
+              event={event}
+              onPress={() => navigateToEvent(event.id)}
+            />
+          ))}
+        </View>
+      )}
+
+      {/* Savings Progress */}
+      {data.savingsSummary.activeGoals > 0 && (
+        <Card style={styles.sectionCard}>
+          <Card.Content>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Savings Progress</Text>
+              <TouchableOpacity onPress={navigateToSavings}>
+                <Text style={styles.seeAllText}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.savingsSummary}>
+              <View style={styles.savingsRow}>
+                <Text style={styles.savingsLabel}>Total Saved</Text>
+                <Text style={styles.savingsAmount}>
+                  ${data.savingsSummary.totalSaved.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.savingsRow}>
+                <Text style={styles.savingsLabel}>Active Goals</Text>
+                <Text style={styles.savingsValue}>
+                  {data.savingsSummary.activeGoals}
+                </Text>
+              </View>
+            </View>
+            {data.savingsSummary.nearestDeadline && (
+              <View style={styles.deadlineRow}>
+                <Ionicons name="calendar-outline" size={16} color="#666" />
+                <Text style={styles.deadlineText}>
+                  Nearest deadline:{' '}
+                  {new Date(data.savingsSummary.nearestDeadline).toLocaleDateString()}
+                </Text>
+              </View>
+            )}
+          </Card.Content>
+        </Card>
+      )}
+
+      {/* Tip of the Day */}
+      <TipCard
+        tip={data.tipOfTheDay}
+        onRefresh={handleRefresh}
+        onLearnMore={() => {
+          // Could navigate to a tips/help screen
+        }}
+      />
     </ScrollView>
   );
 }
@@ -206,115 +270,97 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
-  header: {
-    padding: 20,
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  greetingSection: {
     backgroundColor: '#fff',
+    padding: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   greeting: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 4,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#6200ee',
-    marginBottom: 5,
-  },
-  statLabel: {
+  date: {
     fontSize: 14,
     color: '#666',
   },
+  sectionCard: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+  },
   section: {
-    padding: 16,
-    paddingTop: 8,
+    marginVertical: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
+    fontWeight: '700',
+    color: '#1a1a1a',
   },
-  actionCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  actionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  actionTextContainer: {
-    flex: 1,
-  },
-  actionTitle: {
-    fontSize: 16,
+  seeAllText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#007AFF',
   },
-  actionSubtitle: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-  },
-  actionArrow: {
-    fontSize: 24,
-    color: '#ccc',
-  },
-  gettingStartedCard: {
-    backgroundColor: '#e3f2fd',
+  quickActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    backgroundColor: '#fff',
+    marginVertical: 8,
+    marginHorizontal: 16,
     borderRadius: 12,
   },
-  gettingStartedTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1976d2',
+  savingsSummary: {
+    marginTop: 8,
+  },
+  savingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  gettingStartedText: {
+  savingsLabel: {
     fontSize: 14,
-    color: '#444',
-    lineHeight: 20,
-    marginBottom: 16,
+    color: '#666',
   },
-  gettingStartedButton: {
-    backgroundColor: '#1976d2',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
+  savingsAmount: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#4CAF50',
   },
-  gettingStartedButtonText: {
-    color: '#fff',
+  savingsValue: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  deadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  deadlineText: {
+    fontSize: 13,
+    color: '#666',
   },
 });

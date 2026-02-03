@@ -1,4 +1,4 @@
-import { Prisma, Event, EventStatus, BudgetTier, RSVPStatus } from '@prisma/client';
+import { Prisma, Event, EventStatus, BudgetTier, RSVPStatus, EventAttendee } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { PaginationParams, PaginatedResponse, getPaginationParams, createPaginatedResponse } from '../types/pagination';
 
@@ -23,6 +23,8 @@ export interface CreateEventData {
   recurringPattern?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
   linkedSavingsGoalId?: string;
   calendarEventId?: string;
+  createSavingsGoal?: boolean;
+  savingsGoalName?: string;
 }
 
 export interface UpdateEventData {
@@ -46,6 +48,7 @@ export interface UpdateEventData {
   recurringPattern?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
   linkedSavingsGoalId?: string;
   calendarEventId?: string;
+  updateFutureOccurrences?: boolean;
 }
 
 export interface EventFilters {
@@ -56,61 +59,153 @@ export interface EventFilters {
   budgetTier?: BudgetTier;
 }
 
+export interface EventWithAttendeeCount extends Event {
+  _count?: {
+    attendees: number;
+  };
+  attendeeCount?: number;
+}
+
+export interface CalendarViewEvent {
+  id: string;
+  title: string;
+  date: Date;
+  startTime: string;
+  endTime: string;
+  status: EventStatus;
+  eventType: string;
+  attendeeCount: number;
+}
+
+export interface AddAttendeeData {
+  plusOnes?: number;
+  dietaryRestrictions?: string;
+  notes?: string;
+}
+
+export interface UpdateRSVPData {
+  status: RSVPStatus;
+  plusOnes?: number;
+  dietaryRestrictions?: string;
+}
+
+export interface VenueSearchParams {
+  query: string;
+  location?: string;
+  type?: string;
+}
+
+export interface VenueSuggestion {
+  placeId: string;
+  name: string;
+  address: string;
+  rating?: number;
+  priceLevel?: number;
+  types: string[];
+  location?: {
+    lat: number;
+    lng: number;
+  };
+  photos?: string[];
+  openNow?: boolean;
+}
+
 export class EventService {
   /**
-   * Create a new event
+   * Create a new event with optional linked savings goal
    */
   static async createEvent(userId: string, data: CreateEventData): Promise<Event> {
     try {
-      const event = await prisma.event.create({
-        data: {
-          userId,
-          title: data.title,
-          description: data.description,
-          eventType: data.eventType,
-          date: data.date,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          timezone: data.timezone,
-          locationName: data.locationName,
-          locationAddress: data.locationAddress,
-          locationPlaceId: data.locationPlaceId,
-          locationLat: data.locationLat,
-          locationLng: data.locationLng,
-          estimatedCost: data.estimatedCost,
-          actualCost: data.actualCost,
-          budgetTier: data.budgetTier,
-          status: data.status ?? 'DRAFT',
-          isRecurring: data.isRecurring ?? false,
-          ...(data.recurringPattern !== undefined && {
-            recurringPattern: data.recurringPattern,
-          }),
-          linkedSavingsGoalId: data.linkedSavingsGoalId,
-          calendarEventId: data.calendarEventId,
-        },
+      const result = await prisma.$transaction(async (tx) => {
+        // Create the event
+        const event = await tx.event.create({
+          data: {
+            userId,
+            title: data.title,
+            description: data.description,
+            eventType: data.eventType,
+            date: data.date,
+            startTime: data.startTime,
+            endTime: data.endTime,
+            timezone: data.timezone,
+            locationName: data.locationName,
+            locationAddress: data.locationAddress,
+            locationPlaceId: data.locationPlaceId,
+            locationLat: data.locationLat,
+            locationLng: data.locationLng,
+            estimatedCost: data.estimatedCost,
+            actualCost: data.actualCost,
+            budgetTier: data.budgetTier,
+            status: data.status ?? 'DRAFT',
+            isRecurring: data.isRecurring ?? false,
+            ...(data.recurringPattern !== undefined && {
+              recurringPattern: data.recurringPattern,
+            }),
+            linkedSavingsGoalId: data.linkedSavingsGoalId,
+            calendarEventId: data.calendarEventId,
+          },
+          include: {
+            attendees: {
+              include: {
+                contact: true,
+              },
+            },
+          },
+        });
+
+        // Optionally create linked savings goal
+        if (data.createSavingsGoal && data.estimatedCost > 0) {
+          const savingsGoal = await tx.savingsGoal.create({
+            data: {
+              userId,
+              eventId: event.id,
+              name: data.savingsGoalName || `Savings for ${data.title}`,
+              targetAmount: data.estimatedCost,
+              currentAmount: 0,
+              deadline: data.date,
+              status: 'ACTIVE',
+            },
+          });
+
+          // Update event with linked savings goal
+          await tx.event.update({
+            where: { id: event.id },
+            data: { linkedSavingsGoalId: savingsGoal.id },
+          });
+        }
+
+        return event;
+      });
+
+      // Fetch the complete event with all relations
+      const completeEvent = await prisma.event.findUnique({
+        where: { id: result.id },
         include: {
           attendees: {
             include: {
               contact: true,
             },
           },
+          savingsGoals: true,
         },
       });
 
-      return event;
+      return completeEvent!;
     } catch (error) {
       throw new Error(`Failed to create event: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Get events with filters and pagination
+   * Get events with filters, pagination, and attendee counts
+   * Supports both list and calendar view modes
    */
   static async getEvents(
     userId: string,
     filters?: EventFilters,
-    pagination?: PaginationParams
-  ): Promise<PaginatedResponse<Event>> {
+    pagination?: PaginationParams,
+    view: 'list' | 'calendar' = 'list'
+  ): Promise<PaginatedResponse<EventWithAttendeeCount | CalendarViewEvent>> {
     try {
       const { skip, take } = getPaginationParams(pagination);
 
@@ -136,24 +231,91 @@ export class EventService {
           take,
           orderBy: { date: 'asc' },
           include: {
-            attendees: {
+            attendees: view === 'list' ? {
               include: {
                 contact: true,
               },
+            } : false,
+            _count: {
+              select: { attendees: true },
             },
           },
         }),
         prisma.event.count({ where }),
       ]);
 
-      return createPaginatedResponse(events, total, pagination);
+      // Transform for calendar view (lightweight)
+      if (view === 'calendar') {
+        const calendarEvents: CalendarViewEvent[] = events.map((event) => ({
+          id: event.id,
+          title: event.title,
+          date: event.date,
+          startTime: event.startTime,
+          endTime: event.endTime,
+          status: event.status,
+          eventType: event.eventType,
+          attendeeCount: event._count?.attendees ?? 0,
+        }));
+        return createPaginatedResponse(calendarEvents, total, pagination);
+      }
+
+      // List view with full data
+      const eventsWithCount: EventWithAttendeeCount[] = events.map((event) => ({
+        ...event,
+        attendeeCount: event._count?.attendees ?? 0,
+      }));
+
+      return createPaginatedResponse(eventsWithCount, total, pagination);
     } catch (error) {
       throw new Error(`Failed to get events: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Get event by ID
+   * Get events by month for calendar view
+   */
+  static async getEventsByMonth(
+    userId: string,
+    year: number,
+    month: number
+  ): Promise<CalendarViewEvent[]> {
+    try {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+
+      const events = await prisma.event.findMany({
+        where: {
+          userId,
+          date: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        orderBy: { date: 'asc' },
+        include: {
+          _count: {
+            select: { attendees: true },
+          },
+        },
+      });
+
+      return events.map((event) => ({
+        id: event.id,
+        title: event.title,
+        date: event.date,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        status: event.status,
+        eventType: event.eventType,
+        attendeeCount: event._count?.attendees ?? 0,
+      }));
+    } catch (error) {
+      throw new Error(`Failed to get events by month: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get event by ID with full attendee list and details
    */
   static async getEventById(userId: string, eventId: string): Promise<Event | null> {
     try {
@@ -165,10 +327,23 @@ export class EventService {
         include: {
           attendees: {
             include: {
-              contact: true,
+              contact: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                  profileImage: true,
+                },
+              },
             },
+            orderBy: { contact: { name: 'asc' } },
           },
           savingsGoals: true,
+          reminders: {
+            where: { status: { not: 'DISMISSED' } },
+            orderBy: { scheduledDate: 'asc' },
+          },
         },
       });
 
@@ -179,7 +354,7 @@ export class EventService {
   }
 
   /**
-   * Update event
+   * Update event with optional handling for recurring events
    */
   static async updateEvent(userId: string, eventId: string, data: UpdateEventData): Promise<Event> {
     try {
@@ -195,7 +370,24 @@ export class EventService {
         throw new Error('Event not found');
       }
 
-      const { recurringPattern, ...rest } = data;
+      const { recurringPattern, updateFutureOccurrences, ...rest } = data;
+
+      // For recurring events, handle future occurrences if requested
+      if (existingEvent.isRecurring && updateFutureOccurrences) {
+        // Update all future occurrences with the same recurring pattern
+        await prisma.event.updateMany({
+          where: {
+            userId,
+            recurringPattern: existingEvent.recurringPattern as Prisma.InputJsonValue,
+            date: { gte: existingEvent.date },
+          },
+          data: {
+            ...rest,
+            ...(recurringPattern !== undefined && { recurringPattern }),
+            updatedAt: new Date(),
+          },
+        });
+      }
 
       const event = await prisma.event.update({
         where: { id: eventId },
@@ -210,6 +402,7 @@ export class EventService {
               contact: true,
             },
           },
+          savingsGoals: true,
         },
       });
 
@@ -224,14 +417,22 @@ export class EventService {
 
   /**
    * Cancel event (set status to CANCELLED)
+   * Returns attendee contact IDs for notifications
    */
-  static async cancelEvent(userId: string, eventId: string): Promise<Event> {
+  static async cancelEvent(userId: string, eventId: string): Promise<{ event: Event; attendeeUserIds: string[] }> {
     try {
       // Verify event belongs to user
       const existingEvent = await prisma.event.findFirst({
         where: {
           id: eventId,
           userId,
+        },
+        include: {
+          attendees: {
+            include: {
+              contact: true,
+            },
+          },
         },
       });
 
@@ -245,9 +446,21 @@ export class EventService {
           status: 'CANCELLED',
           updatedAt: new Date(),
         },
+        include: {
+          attendees: {
+            include: {
+              contact: true,
+            },
+          },
+        },
       });
 
-      return event;
+      // Get attendee user IDs for notifications (if contacts have associated users)
+      const attendeeUserIds = existingEvent.attendees
+        .map((a) => a.contact.userId)
+        .filter((id) => id !== userId);
+
+      return { event, attendeeUserIds };
     } catch (error) {
       if (error instanceof Error && error.message === 'Event not found') {
         throw error;
@@ -257,13 +470,124 @@ export class EventService {
   }
 
   /**
-   * Add attendee to event
+   * Delete event permanently
+   */
+  static async deleteEvent(userId: string, eventId: string): Promise<void> {
+    try {
+      // Verify event belongs to user
+      const existingEvent = await prisma.event.findFirst({
+        where: {
+          id: eventId,
+          userId,
+        },
+      });
+
+      if (!existingEvent) {
+        throw new Error('Event not found');
+      }
+
+      await prisma.event.delete({
+        where: { id: eventId },
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Event not found') {
+        throw error;
+      }
+      throw new Error(`Failed to delete event: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Add multiple attendees to event
+   */
+  static async addAttendees(
+    userId: string,
+    eventId: string,
+    contactIds: string[],
+    data?: AddAttendeeData
+  ): Promise<EventAttendee[]> {
+    try {
+      // Verify event belongs to user
+      const event = await prisma.event.findFirst({
+        where: { id: eventId, userId },
+      });
+
+      if (!event) {
+        throw new Error('Event not found');
+      }
+
+      // Verify all contacts belong to user and are not deleted
+      const contacts = await prisma.contact.findMany({
+        where: {
+          id: { in: contactIds },
+          userId,
+          isDeleted: false,
+        },
+      });
+
+      if (contacts.length !== contactIds.length) {
+        throw new Error('One or more contacts not found');
+      }
+
+      // Get existing attendees
+      const existingAttendees = await prisma.eventAttendee.findMany({
+        where: {
+          eventId,
+          contactId: { in: contactIds },
+        },
+      });
+
+      const existingContactIds = existingAttendees.map((a) => a.contactId);
+      const newContactIds = contactIds.filter((id) => !existingContactIds.includes(id));
+
+      // Create new attendees
+      if (newContactIds.length > 0) {
+        await prisma.eventAttendee.createMany({
+          data: newContactIds.map((contactId) => ({
+            eventId,
+            contactId,
+            rsvpStatus: 'PENDING' as RSVPStatus,
+            plusOnes: data?.plusOnes ?? 0,
+            dietaryRestrictions: data?.dietaryRestrictions,
+            notes: data?.notes,
+          })),
+        });
+      }
+
+      // Fetch all attendees
+      const attendees = await prisma.eventAttendee.findMany({
+        where: { eventId },
+        include: {
+          contact: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              profileImage: true,
+            },
+          },
+        },
+        orderBy: { contact: { name: 'asc' } },
+      });
+
+      return attendees;
+    } catch (error) {
+      if (error instanceof Error && (error.message === 'Event not found' || error.message === 'One or more contacts not found')) {
+        throw error;
+      }
+      throw new Error(`Failed to add attendees: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Add single attendee to event (legacy support)
    */
   static async addAttendee(
     eventId: string,
     contactId: string,
-    data?: { plusOnes?: number; dietaryRestrictions?: string; notes?: string }
-  ): Promise<any> {
+    data?: AddAttendeeData
+  ): Promise<EventAttendee> {
     try {
       // Verify event exists
       const event = await prisma.event.findUnique({
@@ -305,6 +629,9 @@ export class EventService {
             dietaryRestrictions: data?.dietaryRestrictions ?? existingAttendee.dietaryRestrictions,
             notes: data?.notes ?? existingAttendee.notes,
           },
+          include: {
+            contact: true,
+          },
         });
       } else {
         // Create new attendee
@@ -316,6 +643,9 @@ export class EventService {
             plusOnes: data?.plusOnes ?? 0,
             dietaryRestrictions: data?.dietaryRestrictions,
             notes: data?.notes,
+          },
+          include: {
+            contact: true,
           },
         });
       }
@@ -335,14 +665,66 @@ export class EventService {
   }
 
   /**
-   * Update RSVP status
+   * Remove attendee from event
    */
-  static async updateRSVP(eventId: string, contactId: string, status: RSVPStatus): Promise<any> {
+  static async removeAttendee(userId: string, eventId: string, attendeeId: string): Promise<void> {
     try {
+      // Verify event belongs to user
+      const event = await prisma.event.findFirst({
+        where: { id: eventId, userId },
+      });
+
+      if (!event) {
+        throw new Error('Event not found');
+      }
+
+      // Verify attendee exists
       const attendee = await prisma.eventAttendee.findFirst({
         where: {
+          id: attendeeId,
           eventId,
-          contactId,
+        },
+      });
+
+      if (!attendee) {
+        throw new Error('Attendee not found');
+      }
+
+      await prisma.eventAttendee.delete({
+        where: { id: attendeeId },
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.message === 'Event not found' || error.message === 'Attendee not found')) {
+        throw error;
+      }
+      throw new Error(`Failed to remove attendee: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update RSVP status with additional details
+   */
+  static async updateRSVP(
+    userId: string,
+    eventId: string,
+    attendeeId: string,
+    data: UpdateRSVPData
+  ): Promise<EventAttendee> {
+    try {
+      // Verify event belongs to user
+      const event = await prisma.event.findFirst({
+        where: { id: eventId, userId },
+      });
+
+      if (!event) {
+        throw new Error('Event not found');
+      }
+
+      // Verify attendee exists
+      const attendee = await prisma.eventAttendee.findFirst({
+        where: {
+          id: attendeeId,
+          eventId,
         },
       });
 
@@ -351,24 +733,128 @@ export class EventService {
       }
 
       const updated = await prisma.eventAttendee.update({
-        where: { id: attendee.id },
+        where: { id: attendeeId },
         data: {
-          rsvpStatus: status,
+          rsvpStatus: data.status,
           rsvpDate: new Date(),
+          ...(data.plusOnes !== undefined && { plusOnes: data.plusOnes }),
+          ...(data.dietaryRestrictions !== undefined && { dietaryRestrictions: data.dietaryRestrictions }),
+        },
+        include: {
+          contact: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              profileImage: true,
+            },
+          },
         },
       });
 
       return updated;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') {
-          throw new Error('Attendee not found');
-        }
-      }
-      if (error instanceof Error && error.message === 'Attendee not found') {
+      if (error instanceof Error && (error.message === 'Event not found' || error.message === 'Attendee not found')) {
         throw error;
       }
       throw new Error(`Failed to update RSVP: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Search venues using Google Places API
+   */
+  static async searchVenues(params: VenueSearchParams): Promise<VenueSuggestion[]> {
+    try {
+      const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+      if (!apiKey) {
+        throw new Error('Google Places API key not configured');
+      }
+
+      // Build the search query
+      let searchQuery = params.query;
+      if (params.type) {
+        searchQuery += ` ${params.type}`;
+      }
+
+      // Use Google Places Text Search API
+      const url = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
+      url.searchParams.append('query', searchQuery);
+      url.searchParams.append('key', apiKey);
+      
+      if (params.location) {
+        // If location is provided, use it for location bias
+        url.searchParams.append('location', params.location);
+        url.searchParams.append('radius', '50000'); // 50km radius
+      }
+
+      const response = await fetch(url.toString());
+      const data = await response.json();
+
+      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        throw new Error(`Google Places API error: ${data.status}`);
+      }
+
+      const venues: VenueSuggestion[] = (data.results || []).map((place: any) => ({
+        placeId: place.place_id,
+        name: place.name,
+        address: place.formatted_address,
+        rating: place.rating,
+        priceLevel: place.price_level,
+        types: place.types || [],
+        location: place.geometry?.location ? {
+          lat: place.geometry.location.lat,
+          lng: place.geometry.location.lng,
+        } : undefined,
+        photos: place.photos?.map((photo: any) => 
+          `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${apiKey}`
+        ),
+        openNow: place.opening_hours?.open_now,
+      }));
+
+      return venues;
+    } catch (error) {
+      throw new Error(`Failed to search venues: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get attendees for an event
+   */
+  static async getAttendees(userId: string, eventId: string): Promise<EventAttendee[]> {
+    try {
+      // Verify event belongs to user
+      const event = await prisma.event.findFirst({
+        where: { id: eventId, userId },
+      });
+
+      if (!event) {
+        throw new Error('Event not found');
+      }
+
+      const attendees = await prisma.eventAttendee.findMany({
+        where: { eventId },
+        include: {
+          contact: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              profileImage: true,
+            },
+          },
+        },
+        orderBy: { contact: { name: 'asc' } },
+      });
+
+      return attendees;
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Event not found') {
+        throw error;
+      }
+      throw new Error(`Failed to get attendees: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

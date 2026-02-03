@@ -110,6 +110,30 @@ export default function ProfileScreen() {
         >
           <Text style={styles.buttonText}>Notification Settings</Text>
         </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={() => {
+            navigation.navigate('CalendarSettings' as never);
+          }}
+        >
+          <Text style={styles.buttonText}>Calendar Settings</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={() => {
+            navigation.navigate('SecuritySettings' as never);
+          }}
+        >
+          <Text style={styles.buttonText}>Security Settings</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={() => {
+            navigation.navigate('Insights' as never);
+          }}
+        >
+          <Text style={styles.buttonText}>Insights & Analytics</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={loadProfile}>
           <Text style={styles.buttonText}>Refresh Profile</Text>
         </TouchableOpacity>

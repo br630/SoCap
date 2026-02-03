@@ -1,8 +1,16 @@
 import { Response } from 'express';
 import { z } from 'zod';
-import { EventService, CreateEventData, UpdateEventData } from '../services/eventService';
+import { 
+  EventService, 
+  CreateEventData, 
+  UpdateEventData,
+  UpdateRSVPData,
+} from '../services/eventService';
+import { NotificationService } from '../services/notificationService';
+import { UserService } from '../services/userService';
 import { AuthenticatedRequest } from '../types/express';
-import { BudgetTier, EventStatus } from '@prisma/client';
+import { BudgetTier, EventStatus, RSVPStatus } from '@prisma/client';
+import { getEventTemplates, getTemplateById, getTemplatesByCategory, getTemplateCategories } from '../config/eventTemplates';
 
 // Validation schemas
 const createEventSchema = z.object({
@@ -23,20 +31,64 @@ const createEventSchema = z.object({
   budgetTier: z.nativeEnum(BudgetTier),
   status: z.nativeEnum(EventStatus).optional(),
   isRecurring: z.boolean().optional(),
+  recurringPattern: z.any().optional(),
   linkedSavingsGoalId: z.string().uuid().optional(),
   calendarEventId: z.string().optional(),
+  createSavingsGoal: z.boolean().optional(),
+  savingsGoalName: z.string().optional(),
 });
 
-const updateEventSchema = createEventSchema.partial();
+const updateEventSchema = createEventSchema.partial().extend({
+  updateFutureOccurrences: z.boolean().optional(),
+});
+
+const addAttendeesSchema = z.object({
+  contactIds: z.array(z.string().uuid()).min(1, 'At least one contact ID is required'),
+});
+
+const updateRSVPSchema = z.object({
+  status: z.nativeEnum(RSVPStatus),
+  plusOnes: z.number().min(0).optional(),
+  dietaryRestrictions: z.string().optional(),
+});
+
+const searchVenuesSchema = z.object({
+  query: z.string().min(1, 'Search query is required'),
+  location: z.string().optional(),
+  type: z.string().optional(),
+});
+
+/**
+ * Helper to get local user ID from Firebase UID
+ */
+async function getLocalUserId(firebaseUid: string, email?: string): Promise<string> {
+  const localUser = await UserService.getUserByEmail(email || '');
+  if (!localUser) {
+    throw new Error('User not found in local database');
+  }
+  return localUser.id;
+}
 
 /**
  * Get all events for the authenticated user
  * GET /events
+ * Query: status, startDate, endDate, page, limit, view (list|calendar), year, month
  */
 export async function getEvents(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const userId = req.user!.uid;
-    const { page, limit, status, eventType, dateFrom, dateTo } = req.query;
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
+    const { page, limit, status, eventType, dateFrom, dateTo, view, year, month } = req.query;
+
+    // Handle calendar view by month
+    if (view === 'calendar' && year && month) {
+      const events = await EventService.getEventsByMonth(
+        localUserId,
+        parseInt(year as string, 10),
+        parseInt(month as string, 10)
+      );
+      res.json({ data: events });
+      return;
+    }
 
     const filters = {
       ...(status && { status: status as EventStatus }),
@@ -50,7 +102,12 @@ export async function getEvents(req: AuthenticatedRequest, res: Response): Promi
       ...(limit && { limit: parseInt(limit as string, 10) }),
     };
 
-    const result = await EventService.getEvents(userId, filters, pagination);
+    const result = await EventService.getEvents(
+      localUserId, 
+      filters, 
+      pagination,
+      (view as 'list' | 'calendar') || 'list'
+    );
     res.json(result);
   } catch (error) {
     console.error('Get events error:', error);
@@ -62,15 +119,15 @@ export async function getEvents(req: AuthenticatedRequest, res: Response): Promi
 }
 
 /**
- * Get a single event by ID
+ * Get a single event by ID with full attendee list and details
  * GET /events/:id
  */
 export async function getEventById(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const userId = req.user!.uid;
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
     const { id } = req.params;
 
-    const event = await EventService.getEventById(userId, id);
+    const event = await EventService.getEventById(localUserId, id);
     if (!event) {
       res.status(404).json({ error: 'Event not found' });
       return;
@@ -89,10 +146,11 @@ export async function getEventById(req: AuthenticatedRequest, res: Response): Pr
 /**
  * Create a new event
  * POST /events
+ * Optionally creates linked savings goal
  */
 export async function createEvent(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const userId = req.user!.uid;
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
     const validated = createEventSchema.parse(req.body);
 
     const data: CreateEventData = {
@@ -113,11 +171,14 @@ export async function createEvent(req: AuthenticatedRequest, res: Response): Pro
       budgetTier: validated.budgetTier,
       status: validated.status,
       isRecurring: validated.isRecurring,
+      recurringPattern: validated.recurringPattern,
       linkedSavingsGoalId: validated.linkedSavingsGoalId,
       calendarEventId: validated.calendarEventId,
+      createSavingsGoal: validated.createSavingsGoal,
+      savingsGoalName: validated.savingsGoalName,
     };
 
-    const event = await EventService.createEvent(userId, data);
+    const event = await EventService.createEvent(localUserId, data);
     res.status(201).json(event);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -139,10 +200,11 @@ export async function createEvent(req: AuthenticatedRequest, res: Response): Pro
 /**
  * Update an event
  * PUT /events/:id
+ * Handles recurring event updates
  */
 export async function updateEvent(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const userId = req.user!.uid;
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
     const { id } = req.params;
     const validated = updateEventSchema.parse(req.body);
 
@@ -164,11 +226,13 @@ export async function updateEvent(req: AuthenticatedRequest, res: Response): Pro
       ...(validated.budgetTier && { budgetTier: validated.budgetTier }),
       ...(validated.status && { status: validated.status }),
       ...(validated.isRecurring !== undefined && { isRecurring: validated.isRecurring }),
+      ...(validated.recurringPattern !== undefined && { recurringPattern: validated.recurringPattern }),
       ...(validated.linkedSavingsGoalId !== undefined && { linkedSavingsGoalId: validated.linkedSavingsGoalId }),
       ...(validated.calendarEventId !== undefined && { calendarEventId: validated.calendarEventId }),
+      ...(validated.updateFutureOccurrences !== undefined && { updateFutureOccurrences: validated.updateFutureOccurrences }),
     };
 
-    const event = await EventService.updateEvent(userId, id, data);
+    const event = await EventService.updateEvent(localUserId, id, data);
     if (!event) {
       res.status(404).json({ error: 'Event not found' });
       return;
@@ -184,6 +248,11 @@ export async function updateEvent(req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
+    if (error instanceof Error && error.message === 'Event not found') {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
     console.error('Update event error:', error);
     res.status(500).json({
       error: 'Failed to update event',
@@ -193,20 +262,283 @@ export async function updateEvent(req: AuthenticatedRequest, res: Response): Pro
 }
 
 /**
- * Delete an event
+ * Cancel an event
  * DELETE /events/:id
+ * Sets status to CANCELLED and sends notifications to attendees
+ */
+export async function cancelEvent(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
+    const { id } = req.params;
+
+    const { event, attendeeUserIds } = await EventService.cancelEvent(localUserId, id);
+
+    // Send notifications to attendees
+    if (attendeeUserIds.length > 0) {
+      for (const userId of attendeeUserIds) {
+        try {
+          await NotificationService.sendPushNotification(
+            userId,
+            'Event Cancelled',
+            `The event "${event.title}" has been cancelled.`,
+            { eventId: event.id, type: 'event_cancelled' }
+          );
+        } catch (notifError) {
+          console.error(`Failed to send notification to user ${userId}:`, notifError);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Event cancelled successfully',
+      event,
+      notificationsSent: attendeeUserIds.length,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Event not found') {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
+    console.error('Cancel event error:', error);
+    res.status(500).json({
+      error: 'Failed to cancel event',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Delete an event permanently (alias for cancelEvent for backward compatibility)
+ * DELETE /events/:id with force=true query param for permanent delete
  */
 export async function deleteEvent(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const userId = req.user!.uid;
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
     const { id } = req.params;
+    const { force } = req.query;
 
-    await EventService.deleteEvent(userId, id);
-    res.status(204).send();
+    if (force === 'true') {
+      await EventService.deleteEvent(localUserId, id);
+      res.status(204).send();
+    } else {
+      // Default to cancel behavior
+      await cancelEvent(req, res);
+    }
   } catch (error) {
+    if (error instanceof Error && error.message === 'Event not found') {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
     console.error('Delete event error:', error);
     res.status(500).json({
       error: 'Failed to delete event',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Add attendees to an event
+ * POST /events/:id/attendees
+ * Body: { contactIds: string[] }
+ */
+export async function addAttendees(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
+    const { id: eventId } = req.params;
+    const validated = addAttendeesSchema.parse(req.body);
+
+    const attendees = await EventService.addAttendees(localUserId, eventId, validated.contactIds);
+
+    res.status(201).json({
+      success: true,
+      attendees,
+      added: validated.contactIds.length,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: 'Validation error',
+        issues: error.issues,
+      });
+      return;
+    }
+
+    if (error instanceof Error && (error.message === 'Event not found' || error.message === 'One or more contacts not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+
+    console.error('Add attendees error:', error);
+    res.status(500).json({
+      error: 'Failed to add attendees',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Remove an attendee from an event
+ * DELETE /events/:id/attendees/:attendeeId
+ */
+export async function removeAttendee(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
+    const { id: eventId, attendeeId } = req.params;
+
+    await EventService.removeAttendee(localUserId, eventId, attendeeId);
+
+    res.json({
+      success: true,
+      message: 'Attendee removed successfully',
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.message === 'Event not found' || error.message === 'Attendee not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+
+    console.error('Remove attendee error:', error);
+    res.status(500).json({
+      error: 'Failed to remove attendee',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Update an attendee's RSVP
+ * PUT /events/:id/attendees/:attendeeId/rsvp
+ * Body: { status, plusOnes?, dietaryRestrictions? }
+ */
+export async function updateRSVP(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
+    const { id: eventId, attendeeId } = req.params;
+    const validated = updateRSVPSchema.parse(req.body);
+
+    const data: UpdateRSVPData = {
+      status: validated.status,
+      plusOnes: validated.plusOnes,
+      dietaryRestrictions: validated.dietaryRestrictions,
+    };
+
+    const attendee = await EventService.updateRSVP(localUserId, eventId, attendeeId, data);
+
+    res.json({
+      success: true,
+      attendee,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: 'Validation error',
+        issues: error.issues,
+      });
+      return;
+    }
+
+    if (error instanceof Error && (error.message === 'Event not found' || error.message === 'Attendee not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+
+    console.error('Update RSVP error:', error);
+    res.status(500).json({
+      error: 'Failed to update RSVP',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Get pre-defined event templates
+ * GET /events/templates
+ * Query: category (optional)
+ */
+export async function getEventTemplatesHandler(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { category, id } = req.query;
+
+    // Get specific template by ID
+    if (id) {
+      const template = getTemplateById(id as string);
+      if (!template) {
+        res.status(404).json({ error: 'Template not found' });
+        return;
+      }
+      res.json(template);
+      return;
+    }
+
+    // Get templates by category
+    if (category) {
+      const templates = getTemplatesByCategory(category as string);
+      res.json({
+        category,
+        templates,
+      });
+      return;
+    }
+
+    // Get all templates grouped by category
+    const categories = getTemplateCategories();
+    const templates = getEventTemplates();
+    
+    const grouped = categories.reduce((acc, cat) => {
+      acc[cat] = templates.filter((t) => t.category === cat);
+      return acc;
+    }, {} as Record<string, typeof templates>);
+
+    res.json({
+      categories,
+      templates: grouped,
+      all: templates,
+    });
+  } catch (error) {
+    console.error('Get templates error:', error);
+    res.status(500).json({
+      error: 'Failed to get event templates',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Search for venues using Google Places API
+ * GET /events/venues/search
+ * Query: query, location, type
+ */
+export async function searchVenues(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const validated = searchVenuesSchema.parse(req.query);
+
+    const venues = await EventService.searchVenues({
+      query: validated.query,
+      location: validated.location,
+      type: validated.type,
+    });
+
+    res.json({
+      success: true,
+      venues,
+      count: venues.length,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: 'Validation error',
+        issues: error.issues,
+      });
+      return;
+    }
+
+    console.error('Search venues error:', error);
+    res.status(500).json({
+      error: 'Failed to search venues',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }

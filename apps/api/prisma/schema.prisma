@@ -8,18 +8,18 @@ datasource db {
 }
 
 model User {
-  id                      String         @id @default(uuid())
-  email                   String         @unique
-  passwordHash            String?
+  id                      String               @id @default(uuid())
+  email                   String               @unique
+  // Note: Passwords are managed by Firebase Authentication, not stored here
   firstName               String
   lastName                String
   profileImage            String?
-  timezone                String         @default("UTC")
+  timezone                String               @default("UTC")
   notificationPreferences Json
-  isVerified              Boolean        @default(false)
-  isActive                Boolean        @default(true)
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @updatedAt
+  isVerified              Boolean              @default(false)
+  isActive                Boolean              @default(true)
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
   aiInsights              AIInsight[]
   contacts                Contact[]
   deviceTokens            DeviceToken[]
@@ -27,6 +27,7 @@ model User {
   relationships           Relationship[]
   reminders               Reminder[]
   savingsGoals            SavingsGoal[]
+  calendarCredential      CalendarCredential?
 
   @@index([email])
   @@map("users")
@@ -251,6 +252,41 @@ model DeviceToken {
   @@map("device_tokens")
 }
 
+model CalendarCredential {
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  provider              CalendarProvider @default(GOOGLE)
+  accessTokenEncrypted  String    @db.Text
+  refreshTokenEncrypted String    @db.Text
+  tokenExpiresAt        DateTime
+  scope                 String?
+  primaryCalendarId     String?
+  lastSyncAt            DateTime?
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([provider])
+  @@map("calendar_credentials")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  ipAddress   String?
+  userAgent   String?  @db.Text
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
 enum ImportSource {
   PHONE
   MANUAL
@@ -370,4 +406,10 @@ enum DevicePlatform {
   IOS
   ANDROID
   WEB
+}
+
+enum CalendarProvider {
+  GOOGLE
+  APPLE
+  OUTLOOK
 }

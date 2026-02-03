@@ -9,7 +9,6 @@ import {
   Alert,
 } from 'react-native';
 import {
-  TextInput,
   Button,
   Card,
   Divider,
@@ -17,6 +16,9 @@ import {
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
+import SecureTextInput from '../../components/security/SecureTextInput';
+import { ScreenshotPrevention } from '../../utils/screenshotPrevention';
+import JailbreakWarning from '../../components/security/JailbreakWarning';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -93,12 +95,15 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
+    <>
+      <JailbreakWarning allowContinue={true} />
+      <ScreenshotPrevention enabled={true}>
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            <View style={styles.content}>
           <Text style={styles.title}>
             Welcome Back
           </Text>
@@ -117,7 +122,7 @@ export default function LoginScreen() {
           )}
 
           <View style={styles.form}>
-            <TextInput
+            <SecureTextInput
               label="Email"
               value={email}
               onChangeText={(text) => {
@@ -129,8 +134,6 @@ export default function LoginScreen() {
                 validateEmail(email);
               }}
               keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
               error={!!emailError}
               mode="outlined"
               style={styles.input}
@@ -142,7 +145,7 @@ export default function LoginScreen() {
               </HelperText>
             )}
 
-            <TextInput
+            <SecureTextInput
               label="Password"
               value={password}
               onChangeText={(text) => {
@@ -153,17 +156,11 @@ export default function LoginScreen() {
                 setTouched({ ...touched, password: true });
                 validatePassword(password);
               }}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
+              secureTextEntry={true}
+              clearClipboardOnPaste={true}
               error={!!passwordError}
               mode="outlined"
               style={styles.input}
-              right={
-                <TextInput.Icon
-                  icon={showPassword ? 'eye-off' : 'eye'}
-                  onPress={() => setShowPassword(!showPassword)}
-                />
-              }
               disabled={isLoading}
             />
             {passwordError && touched.password && (
@@ -241,6 +238,8 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+      </ScreenshotPrevention>
+    </>
   );
 }
 

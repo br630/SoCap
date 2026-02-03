@@ -5,3 +5,5 @@ export * from './interactionService';
 export * from './eventService';
 export * from './savingsService';
 export * from './reminderService';
+export * from './googleCalendarService';
+export * from './availabilityService';

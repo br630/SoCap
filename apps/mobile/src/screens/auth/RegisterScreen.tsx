@@ -18,6 +18,9 @@ import {
 } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
+import SecureTextInput from '../../components/security/SecureTextInput';
+import { ScreenshotPrevention } from '../../utils/screenshotPrevention';
+import JailbreakWarning from '../../components/security/JailbreakWarning';
 
 export default function RegisterScreen() {
   const [firstName, setFirstName] = useState('');
@@ -27,8 +30,6 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const { signUp, signInWithGoogle, signInWithApple, isLoading, error, clearError } = useAuth();
@@ -159,12 +160,15 @@ export default function RegisterScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
+    <>
+      <JailbreakWarning allowContinue={true} />
+      <ScreenshotPrevention enabled={true}>
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            <View style={styles.content}>
           <Text style={styles.title}>
             Create Account
           </Text>
@@ -237,22 +241,16 @@ export default function RegisterScreen() {
               </HelperText>
             )}
 
-            <TextInput
+            <SecureTextInput
               label="Password"
               value={password}
               onChangeText={(text) => handleFieldChange('password', text)}
               onBlur={() => handleBlur('password')}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
+              secureTextEntry={true}
+              clearClipboardOnPaste={true}
               error={!!errors.password && touched.password}
               mode="outlined"
               style={styles.input}
-              right={
-                <TextInput.Icon
-                  icon={showPassword ? 'eye-off' : 'eye'}
-                  onPress={() => setShowPassword(!showPassword)}
-                />
-              }
               disabled={isLoading}
             />
             {errors.password && touched.password && (
@@ -261,22 +259,16 @@ export default function RegisterScreen() {
               </HelperText>
             )}
 
-            <TextInput
+            <SecureTextInput
               label="Confirm Password"
               value={confirmPassword}
               onChangeText={(text) => handleFieldChange('confirmPassword', text)}
               onBlur={() => handleBlur('confirmPassword')}
-              secureTextEntry={!showConfirmPassword}
-              autoCapitalize="none"
+              secureTextEntry={true}
+              clearClipboardOnPaste={true}
               error={!!errors.confirmPassword && touched.confirmPassword}
               mode="outlined"
               style={styles.input}
-              right={
-                <TextInput.Icon
-                  icon={showConfirmPassword ? 'eye-off' : 'eye'}
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                />
-              }
               disabled={isLoading}
             />
             {errors.confirmPassword && touched.confirmPassword && (
@@ -357,6 +349,8 @@ export default function RegisterScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+      </ScreenshotPrevention>
+    </>
   );
 }
 
