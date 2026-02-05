@@ -107,13 +107,15 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:3000/api
    - Click **Add app** → Select **Web** (`</>`)
    - Name: `SoCap Web`
    - Click **Register app**
-6. Copy these 6 values:
-   - `apiKey`: `AIzaSyCDnK3SQQ8Ndh6lnZ8brhKTCc0bC5BbCHA`
-   - `authDomain`: `my-soca-project.firebaseapp.com`
-   - `projectId`: `my-soca-project` (should be `my-soca-project`)
-   - `storageBucket`: `my-soca-project.firebasestorage.app`
-   - `messagingSenderId`: `277931500765`
-   - `appId`: `1:277931500765:web:e05010639f4fcb17556734`
+6. Copy these 6 values from YOUR Firebase console:
+   - `apiKey`: `AIzaSy...` (YOUR key - never commit this!)
+   - `authDomain`: `your-project.firebaseapp.com`
+   - `projectId`: `your-project-id`
+   - `storageBucket`: `your-project.firebasestorage.app`
+   - `messagingSenderId`: `your-sender-id`
+   - `appId`: `your-app-id`
+   
+   ⚠️ **NEVER commit real API keys to Git!**
 
 ---
 
