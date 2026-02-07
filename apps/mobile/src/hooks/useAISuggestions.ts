@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import aiService, {
   MessageContext,
@@ -212,19 +213,28 @@ export function useFetchConversationStarters() {
  * Combined hook for all AI features in a contact context
  */
 export function useContactAI(contactId: string | null) {
-  const messageSuggestions = useMessageSuggestions(contactId, 'check-in', { enabled: false });
+  const [currentContext, setCurrentContext] = React.useState<MessageContext>('check-in');
+  const messageSuggestions = useMessageSuggestions(contactId, currentContext, { enabled: false });
   const conversationStarters = useConversationStarters(contactId, { enabled: false });
   const fetchMessages = useFetchMessageSuggestions();
   const fetchStarters = useFetchConversationStarters();
   const feedback = useAIFeedback();
+  const queryClient = useQueryClient();
 
   return {
     // Message suggestions
     messageSuggestions: messageSuggestions.data,
     isLoadingMessages: messageSuggestions.isLoading || fetchMessages.isPending,
-    fetchMessageSuggestions: (context: MessageContext = 'check-in') => {
+    fetchMessageSuggestions: async (context: MessageContext = 'check-in') => {
       if (contactId) {
-        return fetchMessages.mutateAsync({ contactId, context });
+        setCurrentContext(context); // Update the context so we read from the right cache
+        const result = await fetchMessages.mutateAsync({ contactId, context });
+        // Also update the query cache for this context
+        queryClient.setQueryData(
+          AI_QUERY_KEYS.messageSuggestions(contactId, context),
+          result
+        );
+        return result;
       }
       return Promise.reject(new Error('No contact selected'));
     },

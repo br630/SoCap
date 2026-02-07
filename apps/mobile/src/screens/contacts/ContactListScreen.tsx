@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Searchbar, FAB, Text, ActivityIndicator, Chip } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useContacts } from '../../hooks/useContacts';
 import ContactCard from '../../components/contacts/ContactCard';
 import type { RelationshipTier } from '../../components/contacts/TierBadge';
@@ -26,6 +26,11 @@ const tierLabels: Record<string, string> = {
 
 export default function ContactListScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const { mode } = (route.params as { mode?: 'log-interaction' | 'ai-suggest' }) || {};
+  const isLogInteractionMode = mode === 'log-interaction';
+  const isAISuggestMode = mode === 'ai-suggest';
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTier, setSelectedTier] = useState<RelationshipTier | 'ALL'>('ALL');
   const [page, setPage] = useState(1);
@@ -50,8 +55,19 @@ export default function ContactListScreen() {
     }
   };
 
-  const handleContactPress = (contactId: string) => {
-    navigation.navigate('ContactDetail' as never, { id: contactId } as never);
+  const handleContactPress = (contactId: string, contactName?: string) => {
+    if (isAISuggestMode) {
+      // Navigate directly to AI message suggestions for this contact
+      navigation.navigate('ContactMessages' as never, { 
+        contactId,
+        contactName: contactName || 'Contact',
+      } as never);
+    } else {
+      navigation.navigate('ContactDetail' as never, { 
+        id: contactId,
+        openLogDialog: isLogInteractionMode,
+      } as never);
+    }
   };
 
   const handleAddContact = () => {
@@ -78,6 +94,15 @@ export default function ContactListScreen() {
 
   return (
     <View style={styles.container}>
+      {(isLogInteractionMode || isAISuggestMode) && (
+        <View style={[styles.modeHeader, isAISuggestMode && styles.aiModeHeader]}>
+          <Text style={[styles.modeHeaderText, isAISuggestMode && styles.aiModeHeaderText]}>
+            {isLogInteractionMode 
+              ? '📝 Select a contact to log interaction' 
+              : '✨ Select a contact for AI message suggestions'}
+          </Text>
+        </View>
+      )}
       <Searchbar
         placeholder="Search contacts..."
         onChangeText={setSearchQuery}
@@ -120,7 +145,7 @@ export default function ContactListScreen() {
         <FlatList
           data={contacts}
           renderItem={({ item }) => (
-            <ContactCard contact={item} onPress={() => handleContactPress(item.id)} />
+            <ContactCard contact={item} onPress={() => handleContactPress(item.id, `${item.firstName} ${item.lastName || ''}`.trim())} />
           )}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -144,6 +169,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  modeHeader: {
+    backgroundColor: '#E3F2FD',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#BBDEFB',
+  },
+  aiModeHeader: {
+    backgroundColor: '#F3E5F5',
+    borderBottomColor: '#CE93D8',
+  },
+  modeHeaderText: {
+    color: '#1565C0',
+    fontWeight: '600',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  aiModeHeaderText: {
+    color: '#7B1FA2',
   },
   centerContainer: {
     flex: 1,

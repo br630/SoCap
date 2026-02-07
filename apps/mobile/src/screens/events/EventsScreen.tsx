@@ -6,10 +6,20 @@ import {
   FlatList,
   ActivityIndicator,
   TouchableOpacity,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import eventService, { Event } from '../../services/eventService';
+import eventService, { Event, EventStatus } from '../../services/eventService';
+
+const EVENT_STATUSES: { value: EventStatus; label: string; color: string; icon: string }[] = [
+  { value: 'DRAFT', label: 'Draft', color: '#9E9E9E', icon: 'document-outline' },
+  { value: 'PLANNING', label: 'Planning', color: '#FF9800', icon: 'time-outline' },
+  { value: 'CONFIRMED', label: 'Confirmed', color: '#4CAF50', icon: 'checkmark-circle' },
+  { value: 'COMPLETED', label: 'Completed', color: '#607D8B', icon: 'checkmark-done' },
+  { value: 'CANCELLED', label: 'Cancelled', color: '#F44336', icon: 'close-circle' },
+];
 
 export default function EventsScreen() {
   const navigation = useNavigation();
@@ -28,6 +38,8 @@ export default function EventsScreen() {
   }, [navigation]);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
   useEffect(() => {
     loadEvents();
@@ -65,8 +77,33 @@ export default function EventsScreen() {
     return timeString;
   };
 
+  const handleStatusPress = (event: Event) => {
+    setSelectedEvent(event);
+    setStatusModalVisible(true);
+  };
+
+  const handleStatusChange = async (newStatus: EventStatus) => {
+    if (!selectedEvent) return;
+    
+    try {
+      await eventService.updateEvent(selectedEvent.id, { status: newStatus });
+      // Update local state
+      setEvents(events.map(e => 
+        e.id === selectedEvent.id ? { ...e, status: newStatus } : e
+      ));
+    } catch (error) {
+      console.error('Failed to update status:', error);
+    } finally {
+      setStatusModalVisible(false);
+      setSelectedEvent(null);
+    }
+  };
+
   const renderEvent = ({ item }: { item: Event }) => (
-    <TouchableOpacity style={styles.eventCard}>
+    <TouchableOpacity 
+      style={styles.eventCard}
+      onPress={() => navigation.navigate('EventDetail' as never, { id: item.id } as never)}
+    >
       <View style={styles.eventHeader}>
         <View style={styles.eventDate}>
           <Text style={styles.eventDay}>
@@ -86,9 +123,16 @@ export default function EventsScreen() {
             <Text style={styles.eventLocation}>📍 {item.locationName}</Text>
           )}
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+        <TouchableOpacity 
+          style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleStatusPress(item);
+          }}
+        >
           <Text style={styles.statusText}>{item.status}</Text>
-        </View>
+          <Ionicons name="chevron-down" size={10} color="#fff" />
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -142,6 +186,56 @@ export default function EventsScreen() {
           onRefresh={loadEvents}
         />
       )}
+
+      {/* Status Change Modal */}
+      <Modal
+        visible={statusModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setStatusModalVisible(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setStatusModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Change Event Status</Text>
+            <Text style={styles.modalSubtitle}>{selectedEvent?.title}</Text>
+            
+            {EVENT_STATUSES.map((status) => (
+              <TouchableOpacity
+                key={status.value}
+                style={[
+                  styles.statusOption,
+                  selectedEvent?.status === status.value && styles.statusOptionSelected,
+                ]}
+                onPress={() => handleStatusChange(status.value)}
+              >
+                <Ionicons name={status.icon as any} size={20} color={status.color} />
+                <Text style={[styles.statusOptionText, { color: status.color }]}>
+                  {status.label}
+                </Text>
+                {selectedEvent?.status === status.value && (
+                  <Ionicons name="checkmark" size={20} color={status.color} />
+                )}
+              </TouchableOpacity>
+            ))}
+
+            <View style={styles.modalDivider} />
+            
+            <Text style={styles.autoConfirmNote}>
+              💡 Events auto-confirm when all invitees RSVP "Confirmed"
+            </Text>
+
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setStatusModalVisible(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -214,10 +308,13 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
     marginLeft: 10,
+    gap: 4,
   },
   statusText: {
     fontSize: 10,
@@ -252,6 +349,69 @@ const styles = StyleSheet.create({
   createButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '85%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: '#f5f5f5',
+    gap: 12,
+  },
+  statusOptionSelected: {
+    backgroundColor: '#E3F2FD',
+  },
+  statusOptionText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 16,
+  },
+  autoConfirmNote: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  modalCancel: {
+    padding: 14,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#666',
     fontWeight: '600',
   },
 });

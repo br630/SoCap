@@ -1,3 +1,4 @@
+// Force restart: 210507
 import { Request, Response, NextFunction } from 'express';
 import { verifyIdToken } from '../config/firebase';
 import { FirebaseTokenError } from '../errors/firebaseErrors';
@@ -34,8 +35,25 @@ export function authMiddleware(
 ): void {
   const authHeader = req.headers.authorization;
   const token = extractBearerToken(authHeader);
+  
+  // Verbose debug logging
+  console.log('🔐 AUTH REQUEST:', {
+    method: req.method,
+    path: req.path,
+    hasHeader: !!authHeader,
+    hasToken: !!token,
+    tokenLength: token?.length || 0,
+    tokenStart: token?.substring(0, 50) || 'none',
+    tokenEnd: token ? '...' + token.substring(token.length - 20) : 'none',
+  });
 
   if (!token) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('⚠️ No token extracted from request:', {
+        authHeader: authHeader ? 'present but invalid format' : 'missing',
+        path: req.path,
+      });
+    }
     res.status(401).json({
       error: 'Unauthorized',
       message: 'Missing or invalid Authorization header. Expected: Bearer <token>',
@@ -46,8 +64,10 @@ export function authMiddleware(
   verifyIdToken(token)
     .then((decodedToken) => {
       // Attach user info to request object
+      // Set both 'id' and 'uid' for compatibility with different controllers
       req.user = {
-        uid: decodedToken.uid,
+        id: decodedToken.uid,    // Used by most controllers
+        uid: decodedToken.uid,   // Firebase UID
         email: decodedToken.email,
         token: decodedToken,
       };
@@ -55,6 +75,16 @@ export function authMiddleware(
       next();
     })
     .catch((error) => {
+      // Log detailed error information for debugging
+      console.error('🔐 Auth middleware error:', {
+        error: error instanceof Error ? error.message : String(error),
+        code: (error as any)?.code,
+        stack: error instanceof Error ? error.stack : undefined,
+        tokenPreview: token ? `${token.substring(0, 20)}...` : 'no token',
+        path: req.path,
+        method: req.method,
+      });
+
       if (error instanceof FirebaseTokenError) {
         // Handle expired tokens with appropriate status code
         if (error.code === 'auth/id-token-expired') {
@@ -81,6 +111,7 @@ export function authMiddleware(
           error: 'Unauthorized',
           message: error.message || 'Invalid authentication token',
           code: 'INVALID_TOKEN',
+          details: process.env.NODE_ENV === 'development' ? error.code : undefined,
         });
         return;
       }
@@ -90,6 +121,9 @@ export function authMiddleware(
       res.status(500).json({
         error: 'Internal Server Error',
         message: 'An error occurred while verifying authentication token',
+        details: process.env.NODE_ENV === 'development' 
+          ? (error instanceof Error ? error.message : String(error))
+          : undefined,
       });
     });
 }
@@ -118,6 +152,7 @@ export function optionalAuthMiddleware(
     .then((decodedToken) => {
       // Attach user info to request object if token is valid
       req.user = {
+        id: decodedToken.uid,
         uid: decodedToken.uid,
         email: decodedToken.email,
         token: decodedToken,

@@ -1,71 +1,60 @@
 import crypto from 'crypto';
 
-// Encryption configuration
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 16; // 16 bytes for AES
-const SALT_LENGTH = 64; // 64 bytes for salt
-const TAG_LENGTH = 16; // 16 bytes for GCM auth tag
-const KEY_LENGTH = 32; // 32 bytes for AES-256
+const IV_LENGTH = 16;
+const AUTH_TAG_LENGTH = 16;
 
-/**
- * Get encryption key from environment variable
- * If not set, generates a key (for development only - should be set in production)
- */
-function getEncryptionKey(): Buffer {
-  const keyString = process.env.ENCRYPTION_KEY;
-  
-  if (!keyString) {
-    console.warn('⚠️  ENCRYPTION_KEY not set in environment. Using default key (NOT SECURE FOR PRODUCTION)');
-    // Generate a deterministic key for development (NOT SECURE)
-    return crypto.scryptSync('default-dev-key-change-in-production', 'salt', KEY_LENGTH);
-  }
-
-  // If key is provided as hex string, convert it
-  if (keyString.length === 64) {
-    return Buffer.from(keyString, 'hex');
-  }
-
-  // Otherwise, derive key from the string using scrypt
-  return crypto.scryptSync(keyString, 'encryption-salt', KEY_LENGTH);
+if (!ENCRYPTION_KEY) {
+  console.warn(
+    '⚠️  ENCRYPTION_KEY not set in environment variables. Encryption functions will throw errors.'
+  );
 }
 
 /**
- * Generate a random encryption key (for initial setup)
- * Run this once and add the output to your .env file
+ * Validate encryption key format
  */
-export function generateEncryptionKey(): string {
-  const key = crypto.randomBytes(KEY_LENGTH);
-  return key.toString('hex');
-}
+function validateKey(): Buffer {
+  if (!ENCRYPTION_KEY) {
+    throw new Error('ENCRYPTION_KEY environment variable is not set');
+  }
 
-/**
- * Encrypt plaintext using AES-256-GCM
- * Returns base64 encoded string: salt:iv:tag:ciphertext
- */
-export function encrypt(plaintext: string): string {
-  if (!plaintext || plaintext.trim() === '') {
-    return '';
+  // Key should be 64 hex characters (32 bytes)
+  if (ENCRYPTION_KEY.length !== 64) {
+    throw new Error(
+      'ENCRYPTION_KEY must be 64 hex characters (32 bytes). Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+    );
   }
 
   try {
-    const key = getEncryptionKey();
-    const salt = crypto.randomBytes(SALT_LENGTH);
+    return Buffer.from(ENCRYPTION_KEY, 'hex');
+  } catch (error) {
+    throw new Error('ENCRYPTION_KEY must be a valid hex string');
+  }
+}
+
+/**
+ * Encrypt sensitive text data
+ * @param text - Plain text to encrypt
+ * @returns Encrypted string in format: iv:authTag:encryptedData
+ */
+export function encrypt(text: string): string {
+  if (!text) {
+    return text;
+  }
+
+  try {
+    const key = validateKey();
     const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
-    // Derive key from master key and salt
-    const derivedKey = crypto.scryptSync(key, salt, KEY_LENGTH);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
 
-    const cipher = crypto.createCipheriv(ALGORITHM, derivedKey, iv);
-    
-    let encrypted = cipher.update(plaintext, 'utf8');
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    
-    const tag = cipher.getAuthTag();
+    const authTag = cipher.getAuthTag();
 
-    // Combine salt:iv:tag:encrypted
-    const combined = Buffer.concat([salt, iv, tag, encrypted]);
-    
-    return combined.toString('base64');
+    // Return format: iv:authTag:encryptedData
+    return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
   } catch (error) {
     console.error('Encryption error:', error);
     throw new Error('Failed to encrypt data');
@@ -73,135 +62,143 @@ export function encrypt(plaintext: string): string {
 }
 
 /**
- * Decrypt ciphertext using AES-256-GCM
- * Expects base64 encoded string: salt:iv:tag:ciphertext
+ * Decrypt sensitive text data
+ * @param encryptedText - Encrypted string in format: iv:authTag:encryptedData
+ * @returns Decrypted plain text
  */
-export function decrypt(ciphertext: string): string {
-  if (!ciphertext || ciphertext.trim() === '') {
-    return '';
+export function decrypt(encryptedText: string): string {
+  if (!encryptedText) {
+    return encryptedText;
   }
 
   try {
-    const key = getEncryptionKey();
-    const combined = Buffer.from(ciphertext, 'base64');
+    const key = validateKey();
+    const parts = encryptedText.split(':');
 
-    // Extract components
-    const salt = combined.subarray(0, SALT_LENGTH);
-    const iv = combined.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-    const tag = combined.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
-    const encrypted = combined.subarray(SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
+    if (parts.length !== 3) {
+      throw new Error('Invalid encrypted data format');
+    }
 
-    // Derive key from master key and salt
-    const derivedKey = crypto.scryptSync(key, salt, KEY_LENGTH);
+    const [ivHex, authTagHex, encrypted] = parts;
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
 
-    const decipher = crypto.createDecipheriv(ALGORITHM, derivedKey, iv);
-    decipher.setAuthTag(tag);
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
 
-    let decrypted = decipher.update(encrypted);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
 
-    return decrypted.toString('utf8');
+    return decrypted;
   } catch (error) {
     console.error('Decryption error:', error);
-    // Return null string to indicate decryption failure
-    // This allows the application to continue even if some fields can't be decrypted
-    return '';
+    throw new Error('Failed to decrypt data');
   }
 }
 
 /**
- * Encrypt specified fields in an object
- * Returns new object with encrypted fields
+ * Check if a string is encrypted (has the expected format)
+ * Format: iv(32 hex chars):authTag(32 hex chars):encryptedData(hex)
+ */
+export function isEncrypted(text: string): boolean {
+  if (!text) {
+    return false;
+  }
+  const parts = text.split(':');
+  return parts.length === 3 && parts[0].length === 32 && parts[1].length === 32;
+}
+
+/**
+ * Check if a string looks like corrupted/old encrypted data
+ * (long string with base64-like characters, no readable text)
+ */
+export function looksLikeCorruptedEncryption(text: string): boolean {
+  if (!text || text.length < 50) {
+    return false;
+  }
+  // If it's very long and contains base64/encoded chars but no spaces or normal punctuation
+  const hasBase64Chars = /[A-Za-z0-9+/=]{50,}/.test(text);
+  const hasNoSpaces = !text.includes(' ');
+  const isTooLongForNormalData = text.length > 100;
+  
+  return hasBase64Chars && hasNoSpaces && isTooLongForNormalData;
+}
+
+/**
+ * Encrypt specific fields in an object
+ * @param obj - Object containing fields to encrypt
+ * @param fieldsToEncrypt - Array of field names to encrypt
+ * @returns Object with specified fields encrypted
  */
 export function encryptObject<T extends Record<string, any>>(
   obj: T,
-  fields: string[]
+  fieldsToEncrypt: string[]
 ): T {
-  if (!obj || typeof obj !== 'object') {
+  if (!obj || !fieldsToEncrypt || fieldsToEncrypt.length === 0) {
     return obj;
   }
 
-  const encrypted = { ...obj };
+  const result: Record<string, any> = { ...obj };
 
-  for (const field of fields) {
-    if (field in encrypted && encrypted[field] != null && encrypted[field] !== '') {
-      try {
-        const value = encrypted[field];
-        if (typeof value === 'string') {
-          encrypted[field] = encrypt(value);
-        } else {
-          // For non-string values, convert to JSON string first
-          encrypted[field] = encrypt(JSON.stringify(value));
+  for (const field of fieldsToEncrypt) {
+    if (result[field] && typeof result[field] === 'string' && result[field].trim() !== '') {
+      // Only encrypt if not already encrypted
+      if (!isEncrypted(result[field])) {
+        try {
+          result[field] = encrypt(result[field]);
+        } catch (error) {
+          console.error(`Failed to encrypt field ${field}:`, error);
+          // Continue without encrypting this field
         }
-      } catch (error) {
-        console.error(`Failed to encrypt field ${field}:`, error);
-        // Keep original value if encryption fails
       }
     }
   }
 
-  return encrypted;
+  return result as T;
 }
 
 /**
- * Decrypt specified fields in an object
- * Returns new object with decrypted fields
- * If decryption fails for a field, sets it to null
- * Only attempts to decrypt if the field appears to be encrypted
+ * Decrypt specific fields in an object
+ * @param obj - Object containing encrypted fields
+ * @param fieldsToDecrypt - Array of field names to decrypt
+ * @returns Object with specified fields decrypted
  */
 export function decryptObject<T extends Record<string, any>>(
   obj: T,
-  fields: string[]
+  fieldsToDecrypt: string[]
 ): T {
-  if (!obj || typeof obj !== 'object') {
+  if (!obj || !fieldsToDecrypt || fieldsToDecrypt.length === 0) {
     return obj;
   }
 
-  const decrypted = { ...obj };
+  // If encryption key is not set, return object as-is (data is likely not encrypted)
+  if (!ENCRYPTION_KEY) {
+    return obj;
+  }
 
-  for (const field of fields) {
-    if (field in decrypted && decrypted[field] != null && decrypted[field] !== '') {
-      try {
-        const value = decrypted[field];
-        if (typeof value === 'string') {
-          // Only attempt decryption if the value appears to be encrypted
-          // This prevents trying to decrypt plaintext fields like 'name'
-          if (isEncrypted(value)) {
-            const decryptedValue = decrypt(value);
-            // If decryption returns empty string, it likely failed
-            if (decryptedValue === '' && value !== '') {
-              decrypted[field] = null;
-            } else {
-              decrypted[field] = decryptedValue;
-            }
-          }
-          // If not encrypted, leave the value as-is
+  const result: Record<string, any> = { ...obj };
+
+  for (const field of fieldsToDecrypt) {
+    if (result[field] && typeof result[field] === 'string' && result[field].trim() !== '') {
+      // Check if it's our expected encrypted format
+      if (isEncrypted(result[field])) {
+        try {
+          result[field] = decrypt(result[field]);
+        } catch (error) {
+          console.error(`Failed to decrypt field ${field}:`, error);
+          // If decryption fails, clear the field (data is corrupted)
+          result[field] = null;
         }
-      } catch (error) {
-        console.error(`Failed to decrypt field ${field}:`, error);
-        // Set to null if decryption fails
-        decrypted[field] = null;
+      } 
+      // Check if it looks like corrupted/old encrypted data
+      else if (looksLikeCorruptedEncryption(result[field])) {
+        console.warn(`Field ${field} contains corrupted encryption data, clearing it`);
+        // Clear corrupted encrypted data - user will need to re-enter
+        result[field] = null;
       }
+      // Otherwise, leave as-is (normal unencrypted data)
     }
   }
 
-  return decrypted;
-}
-
-/**
- * Check if a string is encrypted (base64 format check)
- */
-export function isEncrypted(value: string): boolean {
-  if (!value || typeof value !== 'string') {
-    return false;
-  }
-
-  try {
-    // Encrypted values are base64 encoded and have a minimum length
-    const buffer = Buffer.from(value, 'base64');
-    // Minimum size: salt (64) + iv (16) + tag (16) + at least 1 byte of data = 97 bytes
-    return buffer.length >= 97;
-  } catch {
-    return false;
-  }
+  return result as T;
 }

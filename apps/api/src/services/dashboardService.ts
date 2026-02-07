@@ -558,6 +558,35 @@ export class DashboardService {
   }
 
   /**
+   * Get tier priority for sorting (lower = higher priority)
+   */
+  private getTierPriority(tier: RelationshipTier): number {
+    const priorities: Record<RelationshipTier, number> = {
+      INNER_CIRCLE: 1,
+      CLOSE_FRIENDS: 2,
+      FRIENDS: 3,
+      ACQUAINTANCES: 4,
+      PROFESSIONAL: 5,
+    };
+    return priorities[tier] || 5;
+  }
+
+  /**
+   * Get expected contact frequency in days based on tier
+   * Closer connections should be contacted more frequently
+   */
+  private getExpectedDaysForTier(tier: RelationshipTier): number {
+    const frequencies: Record<RelationshipTier, number> = {
+      INNER_CIRCLE: 7,       // Weekly for inner circle
+      CLOSE_FRIENDS: 14,     // Bi-weekly for close friends
+      FRIENDS: 30,           // Monthly for friends
+      ACQUAINTANCES: 60,     // Every 2 months for acquaintances
+      PROFESSIONAL: 90,      // Quarterly for professional
+    };
+    return frequencies[tier] || 30;
+  }
+
+  /**
    * Get contacts needing attention
    */
   private async getContactsNeedingAttention(userId: string): Promise<any[]> {
@@ -571,6 +600,7 @@ export class DashboardService {
             profileImage: true,
             birthday: true,
             anniversary: true,
+            isDeleted: true, // Include to filter
           },
         },
         interactions: {
@@ -584,36 +614,61 @@ export class DashboardService {
 
     const now = new Date();
     const contactsNeedingAttention = relationships
+      // Filter out deleted contacts
+      .filter((rel) => !rel.contact.isDeleted)
       .map((rel) => {
-        const frequency = rel.communicationFrequency;
-        const expectedDays = this.getExpectedDaysForFrequency(frequency);
+        // Use tier-based expected frequency (closer connections need more attention)
+        const expectedDays = this.getExpectedDaysForTier(rel.tier);
         const lastContact = rel.lastContactDate
           ? new Date(rel.lastContactDate)
           : rel.interactions[0]?.date
           ? new Date(rel.interactions[0].date)
           : null;
 
+        // Calculate days since last contact
+        let daysSince: number;
         if (!lastContact) {
-          return { ...rel, daysOverdue: 999 };
+          // If never contacted, use days since relationship was created
+          const createdDate = new Date(rel.createdAt);
+          daysSince = Math.floor(
+            (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+          );
+        } else {
+          daysSince = Math.floor(
+            (now.getTime() - lastContact.getTime()) / (1000 * 60 * 60 * 24)
+          );
         }
 
-        const daysSince = Math.floor(
-          (now.getTime() - lastContact.getTime()) / (1000 * 60 * 60 * 24)
-        );
         const daysOverdue = daysSince - expectedDays;
+        const tierPriority = this.getTierPriority(rel.tier);
+        
+        // Calculate urgency score: higher for closer connections that are overdue
+        // Formula: (daysOverdue / expectedDays) * (6 - tierPriority)
+        // This makes Inner Circle (priority 1) weighted 5x more urgent than Professional (priority 5)
+        const urgencyScore = daysOverdue > 0 
+          ? (daysOverdue / expectedDays) * (6 - tierPriority)
+          : 0;
 
-        return { ...rel, daysOverdue };
+        return { ...rel, daysSince, daysOverdue, tierPriority, urgencyScore, neverContacted: !lastContact };
       })
-      .filter((rel) => rel.daysOverdue > 0)
-      .sort((a, b) => b.daysOverdue - a.daysOverdue)
+      .filter((rel) => rel.daysOverdue > 0 || rel.neverContacted)
+      // Sort by urgency score (tier-weighted), then by tier priority
+      .sort((a, b) => {
+        if (b.urgencyScore !== a.urgencyScore) {
+          return b.urgencyScore - a.urgencyScore;
+        }
+        return a.tierPriority - b.tierPriority;
+      })
       .slice(0, 5)
       .map((rel) => ({
         id: rel.contact.id,
         name: rel.contact.name,
         profileImage: rel.contact.profileImage,
         tier: rel.tier,
+        daysSince: rel.daysSince,
         daysOverdue: rel.daysOverdue,
         lastContactDate: rel.lastContactDate,
+        neverContacted: rel.neverContacted,
       }));
 
     return contactsNeedingAttention;

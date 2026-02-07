@@ -224,4 +224,111 @@ export class ReminderService {
       throw new Error(`Failed to mark reminder as sent: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Create a follow-up reminder to log an interaction
+   * Called when a REACH_OUT reminder is sent
+   * Schedules a reminder for 6 hours later (same day) to log the interaction
+   */
+  static async createLogInteractionFollowUp(
+    userId: string,
+    contactId: string,
+    contactName: string
+  ): Promise<Reminder> {
+    try {
+      // Schedule for 6 hours from now
+      const followUpTime = new Date();
+      followUpTime.setHours(followUpTime.getHours() + 6);
+      
+      // Don't schedule past 10 PM - push to next morning at 9 AM
+      if (followUpTime.getHours() >= 22) {
+        followUpTime.setDate(followUpTime.getDate() + 1);
+        followUpTime.setHours(9, 0, 0, 0);
+      }
+      
+      // Don't schedule before 8 AM - push to 8 AM same day
+      if (followUpTime.getHours() < 8) {
+        followUpTime.setHours(8, 0, 0, 0);
+      }
+
+      // Check if a similar follow-up already exists for today
+      const existingFollowUp = await prisma.reminder.findFirst({
+        where: {
+          userId,
+          contactId,
+          type: 'CUSTOM',
+          title: { contains: 'Log your interaction' },
+          status: 'PENDING',
+          scheduledDate: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)), // Start of today
+            lte: new Date(new Date().setHours(23, 59, 59, 999)), // End of today
+          },
+        },
+      });
+
+      if (existingFollowUp) {
+        console.log(`📝 Follow-up reminder already exists for ${contactName} today`);
+        return existingFollowUp;
+      }
+
+      const reminder = await prisma.reminder.create({
+        data: {
+          userId,
+          contactId,
+          type: 'CUSTOM',
+          title: `📝 Log your interaction with ${contactName}`,
+          message: `Did you reach out to ${contactName}? Take a moment to log your interaction to keep track of your connection.`,
+          scheduledDate: followUpTime,
+          isRecurring: false,
+          status: 'PENDING',
+        },
+      });
+
+      console.log(`📝 Created follow-up reminder to log interaction with ${contactName} for ${followUpTime.toLocaleString()}`);
+      return reminder;
+    } catch (error) {
+      console.error('Failed to create log interaction follow-up:', error);
+      throw new Error(`Failed to create follow-up reminder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Process reach-out reminder: mark as sent and create follow-up
+   */
+  static async processReachOutReminder(reminder: Reminder & { contact?: { name: string } | null }): Promise<void> {
+    try {
+      // Mark the original reminder as sent
+      await this.markAsSent(reminder.id);
+
+      // Create follow-up reminder if this was for a contact
+      if (reminder.contactId && reminder.contact) {
+        await this.createLogInteractionFollowUp(
+          reminder.userId,
+          reminder.contactId,
+          reminder.contact.name
+        );
+      }
+    } catch (error) {
+      console.error('Failed to process reach-out reminder:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete reminder
+   */
+  static async deleteReminder(reminderId: string): Promise<void> {
+    try {
+      await prisma.reminder.delete({
+        where: { id: reminderId },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new Error('Reminder not found');
+        }
+      }
+      throw new Error(`Failed to delete reminder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,19 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Linking,
+  FlatList,
+  Image,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { Checkbox, Searchbar, Avatar, Chip, ActivityIndicator } from 'react-native-paper';
 import eventService from '../../services/eventService';
+import contactService, { Contact } from '../../services/contactService';
 import { EventIdeaCard } from '../../components/ai';
 import { useFetchEventIdeas } from '../../hooks/useAISuggestions';
 import { BudgetTier, EventIdea } from '../../services/aiService';
+import { DatePickerModal } from '../../components/common';
 
 const EVENT_TYPES = [
   { value: 'SOCIAL', label: '🎉 Social', description: 'Parties, hangouts' },
@@ -36,10 +41,22 @@ const BUDGET_TIERS: { value: BudgetTier; label: string; range: string }[] = [
   { value: 'PREMIUM', label: 'Premium', range: '$50+' },
 ];
 
+interface SelectedAttendee {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  profileImage?: string;
+}
+
 export default function AddEditEventScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { contactId } = (route.params as { contactId?: string }) || {};
+  const { contactId, preSelectedAttendees, contactName } = (route.params as { 
+    contactId?: string;
+    preSelectedAttendees?: string[];
+    contactName?: string;
+  }) || {};
 
   // Form state
   const [title, setTitle] = useState('');
@@ -52,6 +69,14 @@ export default function AddEditEventScreen() {
   const [budgetTier, setBudgetTier] = useState<BudgetTier>('MODERATE');
   const [groupSize, setGroupSize] = useState('2');
   
+  // Attendee state
+  const [selectedAttendees, setSelectedAttendees] = useState<SelectedAttendee[]>([]);
+  const [showAttendeeModal, setShowAttendeeModal] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sendInvitations, setSendInvitations] = useState(true);
+  
   // UI state
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
@@ -61,6 +86,96 @@ export default function AddEditEventScreen() {
 
   // AI hook
   const { mutate: fetchEventIdeas, data: eventIdeasData, isPending: isLoadingIdeas } = useFetchEventIdeas();
+
+  // Calculate duration
+  const duration = useMemo(() => {
+    const diffMs = endTime.getTime() - startTime.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffMs < 0) return 'Invalid time range';
+    if (diffHours === 0) return `${diffMinutes} min`;
+    if (diffMinutes === 0) return `${diffHours} hr`;
+    return `${diffHours} hr ${diffMinutes} min`;
+  }, [startTime, endTime]);
+
+  // Load contacts for selection
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  // Auto-update group size when attendees change
+  useEffect(() => {
+    // +1 to include the user themselves
+    const totalPeople = selectedAttendees.length + 1;
+    setGroupSize(totalPeople.toString());
+  }, [selectedAttendees]);
+
+  // Pre-select attendees if provided
+  useEffect(() => {
+    if (preSelectedAttendees && contacts.length > 0) {
+      const preSelected = contacts.filter(c => preSelectedAttendees.includes(c.id));
+      setSelectedAttendees(preSelected.map(c => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        profileImage: c.profileImage,
+      })));
+    } else if (contactId && contacts.length > 0) {
+      const contact = contacts.find(c => c.id === contactId);
+      if (contact) {
+        setSelectedAttendees([{
+          id: contact.id,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
+          profileImage: contact.profileImage,
+        }]);
+      }
+    }
+  }, [preSelectedAttendees, contactId, contacts]);
+
+  const loadContacts = async () => {
+    setLoadingContacts(true);
+    try {
+      const response = await contactService.getContacts({ limit: 100 });
+      setContacts(response.data || []);
+    } catch (error) {
+      console.error('Failed to load contacts:', error);
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+
+  const filteredContacts = useMemo(() => {
+    if (!searchQuery.trim()) return contacts;
+    const query = searchQuery.toLowerCase();
+    return contacts.filter(c => 
+      c.name.toLowerCase().includes(query) ||
+      c.email?.toLowerCase().includes(query) ||
+      c.phone?.includes(query)
+    );
+  }, [contacts, searchQuery]);
+
+  const toggleAttendee = (contact: Contact) => {
+    const isSelected = selectedAttendees.some(a => a.id === contact.id);
+    if (isSelected) {
+      setSelectedAttendees(selectedAttendees.filter(a => a.id !== contact.id));
+    } else {
+      setSelectedAttendees([...selectedAttendees, {
+        id: contact.id,
+        name: contact.name,
+        phone: contact.phone,
+        email: contact.email,
+        profileImage: contact.profileImage,
+      }]);
+    }
+  };
+
+  const removeAttendee = (id: string) => {
+    setSelectedAttendees(selectedAttendees.filter(a => a.id !== id));
+  };
 
   const handleGetIdeas = () => {
     setShowAIModal(true);
@@ -100,6 +215,84 @@ export default function AddEditEventScreen() {
     });
   };
 
+  const sendInvitation = (attendee: SelectedAttendee) => {
+    const eventDateStr = formatDate(date);
+    const eventTimeStr = `${formatTime(startTime)} - ${formatTime(endTime)}`;
+    
+    const message = `🎉 You're invited!\n\n` +
+      `${title}\n` +
+      `📅 ${eventDateStr}\n` +
+      `⏰ ${eventTimeStr}\n` +
+      `${locationName ? `📍 ${locationName}\n` : ''}` +
+      `${description ? `\n${description}\n` : ''}` +
+      `\nLet me know if you can make it!`;
+
+    // Show options for sending
+    Alert.alert(
+      `Invite ${attendee.name}`,
+      'How would you like to send the invitation?',
+      [
+        {
+          text: 'SMS',
+          onPress: () => {
+            if (attendee.phone) {
+              Linking.openURL(`sms:${attendee.phone}?body=${encodeURIComponent(message)}`);
+            } else {
+              Alert.alert('No Phone', `${attendee.name} doesn't have a phone number`);
+            }
+          },
+        },
+        {
+          text: 'WhatsApp',
+          onPress: () => {
+            if (attendee.phone) {
+              const cleanPhone = attendee.phone.replace(/\D/g, '');
+              Linking.openURL(`whatsapp://send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`);
+            } else {
+              Alert.alert('No Phone', `${attendee.name} doesn't have a phone number`);
+            }
+          },
+        },
+        {
+          text: 'Email',
+          onPress: () => {
+            if (attendee.email) {
+              Linking.openURL(`mailto:${attendee.email}?subject=${encodeURIComponent(`You're invited: ${title}`)}&body=${encodeURIComponent(message)}`);
+            } else {
+              Alert.alert('No Email', `${attendee.name} doesn't have an email address`);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const sendAllInvitations = () => {
+    const eventDateStr = formatDate(date);
+    const eventTimeStr = `${formatTime(startTime)} - ${formatTime(endTime)}`;
+    
+    const message = `🎉 You're invited!\n\n` +
+      `${title}\n` +
+      `📅 ${eventDateStr}\n` +
+      `⏰ ${eventTimeStr}\n` +
+      `${locationName ? `📍 ${locationName}\n` : ''}` +
+      `${description ? `\n${description}\n` : ''}` +
+      `\nLet me know if you can make it!`;
+
+    // For now, we'll compose a group message via SMS
+    const phones = selectedAttendees
+      .filter(a => a.phone)
+      .map(a => a.phone)
+      .join(',');
+    
+    if (phones) {
+      Linking.openURL(`sms:${phones}?body=${encodeURIComponent(message)}`);
+    } else {
+      Alert.alert('No Phone Numbers', 'None of the selected attendees have phone numbers');
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim()) {
       Alert.alert('Error', 'Please enter an event title');
@@ -108,6 +301,8 @@ export default function AddEditEventScreen() {
 
     setSaving(true);
     try {
+      const attendeeIds = selectedAttendees.map(a => a.id);
+      
       await eventService.createEvent({
         title: title.trim(),
         eventType: eventType as any,
@@ -118,12 +313,34 @@ export default function AddEditEventScreen() {
         description: description.trim() || undefined,
         status: 'PLANNING',
         isAllDay: false,
-        attendeeIds: contactId ? [contactId] : [],
+        attendeeIds,
       });
 
-      Alert.alert('Success', 'Event created!', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      // Ask if user wants to send invitations
+      if (sendInvitations && selectedAttendees.length > 0) {
+        Alert.alert(
+          'Event Created! 🎉',
+          `Would you like to send invitations to ${selectedAttendees.length} attendee${selectedAttendees.length > 1 ? 's' : ''}?`,
+          [
+            {
+              text: 'Send Invitations',
+              onPress: () => {
+                sendAllInvitations();
+                navigation.goBack();
+              },
+            },
+            {
+              text: 'Maybe Later',
+              onPress: () => navigation.goBack(),
+              style: 'cancel',
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Success', 'Event created!', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      }
     } catch (error) {
       console.error('Error creating event:', error);
       Alert.alert('Error', 'Failed to create event. Please try again.');
@@ -187,16 +404,18 @@ export default function AddEditEventScreen() {
             <Ionicons name="calendar-outline" size={20} color="#666" />
             <Text style={styles.dateButtonText}>{formatDate(date)}</Text>
           </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={date}
-              mode="date"
-              onChange={(e, selectedDate) => {
-                setShowDatePicker(false);
-                if (selectedDate) setDate(selectedDate);
-              }}
-            />
-          )}
+          <DatePickerModal
+            visible={showDatePicker}
+            value={date}
+            mode="date"
+            title="Select Date"
+            minimumDate={new Date()}
+            onConfirm={(selectedDate) => {
+              setDate(selectedDate);
+              setShowDatePicker(false);
+            }}
+            onCancel={() => setShowDatePicker(false)}
+          />
         </View>
 
         {/* Time */}
@@ -207,16 +426,17 @@ export default function AddEditEventScreen() {
               <Ionicons name="time-outline" size={20} color="#666" />
               <Text style={styles.dateButtonText}>{formatTime(startTime)}</Text>
             </TouchableOpacity>
-            {showStartPicker && (
-              <DateTimePicker
-                value={startTime}
-                mode="time"
-                onChange={(e, selectedTime) => {
-                  setShowStartPicker(false);
-                  if (selectedTime) setStartTime(selectedTime);
-                }}
-              />
-            )}
+            <DatePickerModal
+              visible={showStartPicker}
+              value={startTime}
+              mode="time"
+              title="Select Start Time"
+              onConfirm={(selectedTime) => {
+                setStartTime(selectedTime);
+                setShowStartPicker(false);
+              }}
+              onCancel={() => setShowStartPicker(false)}
+            />
           </View>
           <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
             <Text style={styles.label}>End Time</Text>
@@ -224,17 +444,80 @@ export default function AddEditEventScreen() {
               <Ionicons name="time-outline" size={20} color="#666" />
               <Text style={styles.dateButtonText}>{formatTime(endTime)}</Text>
             </TouchableOpacity>
-            {showEndPicker && (
-              <DateTimePicker
-                value={endTime}
-                mode="time"
-                onChange={(e, selectedTime) => {
-                  setShowEndPicker(false);
-                  if (selectedTime) setEndTime(selectedTime);
-                }}
-              />
-            )}
+            <DatePickerModal
+              visible={showEndPicker}
+              value={endTime}
+              mode="time"
+              title="Select End Time"
+              onConfirm={(selectedTime) => {
+                setEndTime(selectedTime);
+                setShowEndPicker(false);
+              }}
+              onCancel={() => setShowEndPicker(false)}
+            />
           </View>
+        </View>
+
+        {/* Duration Display */}
+        <View style={styles.durationContainer}>
+          <Ionicons name="hourglass-outline" size={18} color="#7C4DFF" />
+          <Text style={styles.durationText}>Duration: {duration}</Text>
+        </View>
+
+        {/* Attendees Section */}
+        <View style={styles.inputGroup}>
+          <View style={styles.attendeesHeader}>
+            <Text style={styles.label}>Invite People</Text>
+            <TouchableOpacity 
+              style={styles.addAttendeeButton}
+              onPress={() => setShowAttendeeModal(true)}
+            >
+              <Ionicons name="person-add" size={18} color="#7C4DFF" />
+              <Text style={styles.addAttendeeText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {selectedAttendees.length === 0 ? (
+            <TouchableOpacity 
+              style={styles.emptyAttendees}
+              onPress={() => setShowAttendeeModal(true)}
+            >
+              <Ionicons name="people-outline" size={32} color="#ccc" />
+              <Text style={styles.emptyAttendeesText}>Tap to add attendees</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.attendeesList}>
+              {selectedAttendees.map((attendee) => (
+                <View key={attendee.id} style={styles.attendeeChip}>
+                  <Avatar.Text 
+                    size={28} 
+                    label={attendee.name.charAt(0).toUpperCase()}
+                    style={styles.attendeeAvatar}
+                  />
+                  <Text style={styles.attendeeName} numberOfLines={1}>{attendee.name}</Text>
+                  <TouchableOpacity 
+                    onPress={() => sendInvitation(attendee)}
+                    style={styles.sendInviteButton}
+                  >
+                    <Ionicons name="paper-plane-outline" size={16} color="#7C4DFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => removeAttendee(attendee.id)}>
+                    <Ionicons name="close-circle" size={20} color="#999" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              
+              {/* Send all invitations toggle */}
+              <View style={styles.sendAllContainer}>
+                <Checkbox
+                  status={sendInvitations ? 'checked' : 'unchecked'}
+                  onPress={() => setSendInvitations(!sendInvitations)}
+                  color="#7C4DFF"
+                />
+                <Text style={styles.sendAllText}>Send invitations when event is created</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Location */}
@@ -312,6 +595,86 @@ export default function AddEditEventScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Attendee Selection Modal */}
+      <Modal
+        visible={showAttendeeModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAttendeeModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Attendees</Text>
+            <TouchableOpacity onPress={() => setShowAttendeeModal(false)}>
+              <Text style={styles.modalClose}>Done ({selectedAttendees.length})</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Searchbar
+            placeholder="Search contacts..."
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+            style={styles.searchBar}
+          />
+
+          {loadingContacts ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#7C4DFF" />
+              <Text style={styles.loadingText}>Loading contacts...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredContacts}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.contactsList}
+              renderItem={({ item }) => {
+                const isSelected = selectedAttendees.some(a => a.id === item.id);
+                return (
+                  <TouchableOpacity
+                    style={[styles.contactItem, isSelected && styles.contactItemSelected]}
+                    onPress={() => toggleAttendee(item)}
+                  >
+                    <Checkbox
+                      status={isSelected ? 'checked' : 'unchecked'}
+                      color="#7C4DFF"
+                    />
+                    {item.profileImage ? (
+                      <Image source={{ uri: item.profileImage }} style={styles.contactAvatar} />
+                    ) : (
+                      <Avatar.Text 
+                        size={40} 
+                        label={item.name.charAt(0).toUpperCase()}
+                        style={styles.contactAvatarText}
+                      />
+                    )}
+                    <View style={styles.contactInfo}>
+                      <Text style={styles.contactName}>{item.name}</Text>
+                      {item.phone && (
+                        <Text style={styles.contactDetail}>{item.phone}</Text>
+                      )}
+                      {item.email && !item.phone && (
+                        <Text style={styles.contactDetail}>{item.email}</Text>
+                      )}
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={24} color="#7C4DFF" />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={
+                <View style={styles.emptyContactsList}>
+                  <Ionicons name="people-outline" size={48} color="#ccc" />
+                  <Text style={styles.emptyContactsText}>
+                    {searchQuery ? 'No contacts found' : 'No contacts yet'}
+                  </Text>
+                </View>
+              }
+            />
+          )}
+        </View>
+      </Modal>
 
       {/* AI Ideas Modal */}
       <Modal
@@ -591,5 +954,159 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 16,
+  },
+  durationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E5FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 20,
+    marginTop: -10,
+    gap: 6,
+  },
+  durationText: {
+    fontSize: 14,
+    color: '#7C4DFF',
+    fontWeight: '500',
+  },
+  attendeesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  addAttendeeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F3E5FF',
+  },
+  addAttendeeText: {
+    fontSize: 13,
+    color: '#7C4DFF',
+    fontWeight: '500',
+  },
+  emptyAttendees: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+  },
+  emptyAttendeesText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+  },
+  attendeesList: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  attendeeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginBottom: 8,
+    gap: 8,
+  },
+  attendeeAvatar: {
+    backgroundColor: '#7C4DFF',
+  },
+  attendeeName: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  sendInviteButton: {
+    padding: 4,
+  },
+  sendAllContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  sendAllText: {
+    fontSize: 13,
+    color: '#666',
+    flex: 1,
+  },
+  searchBar: {
+    margin: 16,
+    marginTop: 8,
+    elevation: 0,
+    backgroundColor: '#f0f0f0',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#666',
+  },
+  contactsList: {
+    paddingHorizontal: 16,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  contactItemSelected: {
+    backgroundColor: '#F3E5FF',
+    borderWidth: 1,
+    borderColor: '#7C4DFF',
+  },
+  contactAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  contactAvatarText: {
+    backgroundColor: '#7C4DFF',
+  },
+  contactInfo: {
+    flex: 1,
+  },
+  contactName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  contactDetail: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  emptyContactsList: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyContactsText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 12,
   },
 });

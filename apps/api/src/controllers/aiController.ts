@@ -1,20 +1,45 @@
 import { Request, Response } from 'express';
 import { AIService } from '../services/aiService';
 import { prisma } from '../lib/prisma';
+import { UserService } from '../services/userService';
+import { AuthenticatedRequest } from '../types/express';
+
+/**
+ * Helper to get local user ID from Firebase UID
+ */
+export async function getLocalUserId(firebaseUid: string, email?: string): Promise<string | null> {
+  try {
+    const localUser = await UserService.getUserByEmail(email || '');
+    return localUser?.id || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Get message suggestions for a contact
  * POST /ai/message-suggestions
  */
-export const getMessageSuggestions = async (req: Request, res: Response): Promise<void> => {
+export const getMessageSuggestions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  console.log('📨 getMessageSuggestions called:', { body: req.body, user: req.user?.email });
+  
   try {
-    const userId = req.user?.id;
-    if (!userId) {
+    if (!req.user) {
+      console.log('❌ No user in request');
       res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    const userId = await getLocalUserId(req.user.uid, req.user.email);
+    console.log('👤 Local user ID:', userId);
+    if (!userId) {
+      console.log('❌ User not found in database');
+      res.status(401).json({ error: 'User not found' });
       return;
     }
 
     const { contactId, context = 'general' } = req.body;
+    console.log('📝 Request params:', { contactId, context });
 
     if (!contactId) {
       res.status(400).json({ error: 'contactId is required' });
@@ -47,7 +72,9 @@ export const getMessageSuggestions = async (req: Request, res: Response): Promis
       return;
     }
 
+    console.log('🤖 Generating AI suggestions...');
     const suggestions = await AIService.generateMessageSuggestions(userId, contactId, context);
+    console.log('✅ Generated suggestions:', suggestions);
 
     // Store in AIInsight table
     const insight = await prisma.aIInsight.create({
@@ -62,12 +89,12 @@ export const getMessageSuggestions = async (req: Request, res: Response): Promis
       },
     });
 
+    // Response format expected by frontend
     res.json({
-      success: true,
-      data: {
-        insightId: insight.id,
-        suggestions,
-      },
+      suggestions,
+      insightId: insight.id,
+      contactName: contact.name,
+      cached: false,
     });
   } catch (error) {
     console.error('Get message suggestions error:', error);
@@ -82,11 +109,16 @@ export const getMessageSuggestions = async (req: Request, res: Response): Promis
  * Get event ideas
  * POST /ai/event-ideas
  */
-export const getEventIdeas = async (req: Request, res: Response): Promise<void> => {
+export const getEventIdeas = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
+    if (!req.user) {
       res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    const userId = await getLocalUserId(req.user.uid, req.user.email);
+    if (!userId) {
+      res.status(401).json({ error: 'User not found' });
       return;
     }
 
@@ -135,12 +167,11 @@ export const getEventIdeas = async (req: Request, res: Response): Promise<void> 
       },
     });
 
+    // Response format expected by frontend
     res.json({
-      success: true,
-      data: {
-        insightId: insight.id,
-        ideas,
-      },
+      ideas,
+      insightId: insight.id,
+      cached: false,
     });
   } catch (error) {
     console.error('Get event ideas error:', error);
@@ -155,11 +186,16 @@ export const getEventIdeas = async (req: Request, res: Response): Promise<void> 
  * Get conversation starters for a contact
  * GET /ai/conversation-starters/:contactId
  */
-export const getConversationStarters = async (req: Request, res: Response): Promise<void> => {
+export const getConversationStarters = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
+    if (!req.user) {
       res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    const userId = await getLocalUserId(req.user.uid, req.user.email);
+    if (!userId) {
+      res.status(401).json({ error: 'User not found' });
       return;
     }
 
@@ -184,7 +220,12 @@ export const getConversationStarters = async (req: Request, res: Response): Prom
       return;
     }
 
-    const starters = await AIService.generateConversationStarters(userId, contactId);
+    const rawStarters = await AIService.generateConversationStarters(userId, contactId);
+
+    // Convert starters to strings for frontend (frontend expects string[])
+    const starters = rawStarters.map(s => 
+      typeof s === 'string' ? s : s.opener || `${s.topic}: ${s.opener}`
+    );
 
     // Store in AIInsight table
     const insight = await prisma.aIInsight.create({
@@ -192,16 +233,16 @@ export const getConversationStarters = async (req: Request, res: Response): Prom
         userId,
         contactId,
         type: 'CONVERSATION_STARTER',
-        content: JSON.stringify({ starters }),
+        content: JSON.stringify({ starters: rawStarters }),
       },
     });
 
+    // Response format expected by frontend
     res.json({
-      success: true,
-      data: {
-        insightId: insight.id,
-        starters,
-      },
+      starters,
+      insightId: insight.id,
+      contactName: contact.name,
+      cached: false,
     });
   } catch (error) {
     console.error('Get conversation starters error:', error);
@@ -216,11 +257,16 @@ export const getConversationStarters = async (req: Request, res: Response): Prom
  * Get a relationship tip
  * GET /ai/relationship-tip
  */
-export const getRelationshipTip = async (req: Request, res: Response): Promise<void> => {
+export const getRelationshipTip = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
+    if (!req.user) {
       res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    const userId = await getLocalUserId(req.user.uid, req.user.email);
+    if (!userId) {
+      res.status(401).json({ error: 'User not found' });
       return;
     }
 
@@ -235,12 +281,11 @@ export const getRelationshipTip = async (req: Request, res: Response): Promise<v
       },
     });
 
+    // Response format expected by frontend
     res.json({
-      success: true,
-      data: {
-        insightId: insight.id,
-        ...tip,
-      },
+      tip,
+      insightId: insight.id,
+      cached: false,
     });
   } catch (error) {
     console.error('Get relationship tip error:', error);
@@ -255,11 +300,16 @@ export const getRelationshipTip = async (req: Request, res: Response): Promise<v
  * Submit feedback for an AI insight
  * POST /ai/feedback
  */
-export const submitFeedback = async (req: Request, res: Response): Promise<void> => {
+export const submitFeedback = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
+    if (!req.user) {
       res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    const userId = await getLocalUserId(req.user.uid, req.user.email);
+    if (!userId) {
+      res.status(401).json({ error: 'User not found' });
       return;
     }
 
@@ -320,11 +370,16 @@ export const submitFeedback = async (req: Request, res: Response): Promise<void>
  * Get AI usage stats for the current user
  * GET /ai/usage
  */
-export const getUsageStats = async (req: Request, res: Response): Promise<void> => {
+export const getUsageStats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
+    if (!req.user) {
       res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    const userId = await getLocalUserId(req.user.uid, req.user.email);
+    if (!userId) {
+      res.status(401).json({ error: 'User not found' });
       return;
     }
 
@@ -346,16 +401,17 @@ export const getUsageStats = async (req: Request, res: Response): Promise<void> 
       return acc;
     }, {} as Record<string, number>);
 
+    // Response format expected by frontend
     res.json({
-      success: true,
-      data: {
-        ...stats,
-        insights: {
-          total: totalInsights,
-          used: usedInsights,
-          usageRate: totalInsights > 0 ? Math.round((usedInsights / totalInsights) * 100) : 0,
-          byType: typeStats,
-        },
+      today: stats.today || 0,
+      limit: stats.limit || 50,
+      remaining: stats.remaining || 50,
+      resetAt: stats.resetAt || new Date().toISOString(),
+      insights: {
+        total: totalInsights,
+        used: usedInsights,
+        usageRate: totalInsights > 0 ? Math.round((usedInsights / totalInsights) * 100) : 0,
+        byType: typeStats,
       },
     });
   } catch (error) {
@@ -371,11 +427,16 @@ export const getUsageStats = async (req: Request, res: Response): Promise<void> 
  * Get user's AI insights history
  * GET /ai/history
  */
-export const getInsightHistory = async (req: Request, res: Response): Promise<void> => {
+export const getInsightHistory = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
+    if (!req.user) {
       res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    
+    const userId = await getLocalUserId(req.user.uid, req.user.email);
+    if (!userId) {
+      res.status(401).json({ error: 'User not found' });
       return;
     }
 
@@ -404,9 +465,9 @@ export const getInsightHistory = async (req: Request, res: Response): Promise<vo
       prisma.aIInsight.count({ where }),
     ]);
 
+    // Response format expected by frontend
     res.json({
-      success: true,
-      data: insights.map(insight => ({
+      insights: insights.map(insight => ({
         ...insight,
         content: JSON.parse(insight.content as string),
       })),

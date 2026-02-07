@@ -91,7 +91,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Set up token getter for API client (uses token service for auto-refresh)
   useEffect(() => {
     setTokenGetter(async () => {
-      return await tokenService.getAccessToken();
+      try {
+        const token = await tokenService.getAccessToken();
+        if (!token && process.env.NODE_ENV === 'development') {
+          console.warn('⚠️ Token getter called but no token available');
+        }
+        return token;
+      } catch (error) {
+        console.error('❌ Error in token getter:', error);
+        return null;
+      }
     });
   }, []);
 
@@ -120,7 +129,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Load persisted auth state on mount
   useEffect(() => {
-    loadPersistedAuth();
+    const initializeAuth = async () => {
+      await loadPersistedAuth();
+      
+      // If user is persisted, ensure token is available
+      const storedUser = await secureStore.getItem(AUTH_STORAGE_KEY);
+      if (storedUser) {
+        const firebaseUser = auth.currentUser;
+        if (firebaseUser) {
+          try {
+            // Ensure token is stored for API calls
+            const token = await firebaseUser.getIdToken();
+            await tokenService.storeTokens(token, undefined, 3600);
+            if (process.env.NODE_ENV === 'development') {
+              console.log('✅ Token stored on app initialization');
+            }
+          } catch (error) {
+            console.error('Error storing token on initialization:', error);
+          }
+        }
+      }
+    };
+    
+    initializeAuth();
   }, []);
 
   // Listen to Firebase auth state changes
@@ -209,6 +240,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       setIsLoading(true);
       const response = await authService.login({ email, password });
+      
+      // Immediately store the token after login to prevent race conditions
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        await tokenService.storeTokens(token, undefined, 3600);
+      }
+      
       await persistUser(response.user);
     } catch (err: any) {
       const errorMessage = err.message || 'Sign in failed';
@@ -232,6 +271,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firstName,
         lastName,
       });
+      
+      // Immediately store the token after signup to prevent race conditions
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        await tokenService.storeTokens(token, undefined, 3600);
+      }
+      
       await persistUser(response.user);
     } catch (err: any) {
       const errorMessage = err.message || 'Sign up failed';
@@ -272,6 +319,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       setIsLoading(true);
       const response = await authService.loginWithGoogle();
+      
+      // Immediately store the token after Google sign in
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        await tokenService.storeTokens(token, undefined, 3600);
+      }
+      
       await persistUser(response.user);
     } catch (err: any) {
       const errorMessage = err.message || 'Google sign in failed';
@@ -290,6 +345,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       setIsLoading(true);
       const response = await authService.loginWithApple();
+      
+      // Immediately store the token after Apple sign in
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        await tokenService.storeTokens(token, undefined, 3600);
+      }
+      
       await persistUser(response.user);
     } catch (err: any) {
       const errorMessage = err.message || 'Apple sign in failed';

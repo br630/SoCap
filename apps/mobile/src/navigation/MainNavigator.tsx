@@ -7,19 +7,25 @@ import ContactListScreen from '../screens/contacts/ContactListScreen';
 import ContactDetailScreen from '../screens/contacts/ContactDetailScreen';
 import AddEditContactScreen from '../screens/contacts/AddEditContactScreen';
 import ImportContactsScreen from '../screens/contacts/ImportContactsScreen';
+import ContactMessagesScreen from '../screens/contacts/ContactMessagesScreen';
+import ContactEventsScreen from '../screens/contacts/ContactEventsScreen';
 import EventsScreen from '../screens/events/EventsScreen';
 import AddEditEventScreen from '../screens/events/AddEditEventScreen';
+import EventDetailScreen from '../screens/events/EventDetailScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import NotificationPreferencesScreen from '../screens/settings/NotificationPreferencesScreen';
 import CalendarSettingsScreen from '../screens/settings/CalendarSettingsScreen';
 import SecuritySettingsScreen from '../screens/settings/SecuritySettingsScreen';
+import WritingStyleScreen from '../screens/settings/WritingStyleScreen';
 import InsightsScreen from '../screens/insights/InsightsScreen';
 
 import { MainTabParamList, ContactStackParamList, SettingsStackParamList } from '../types/navigation';
 
 type EventStackParamList = {
   EventList: undefined;
+  EventDetail: { id: string };
   AddEditEvent: { contactId?: string };
+  CreateEvent: { preSelectedAttendees?: string[]; contactName?: string };
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -55,6 +61,20 @@ function ContactNavigator() {
         component={ImportContactsScreen}
         options={{ title: 'Import Contacts' }}
       />
+      <ContactStack.Screen
+        name="ContactMessages"
+        component={ContactMessagesScreen}
+        options={({ route }: any) => ({ 
+          title: `Message ${route.params?.contactName || 'Contact'}` 
+        })}
+      />
+      <ContactStack.Screen
+        name="ContactEvents"
+        component={ContactEventsScreen}
+        options={({ route }: any) => ({ 
+          title: `Events with ${route.params?.contactName || 'Contact'}` 
+        })}
+      />
     </ContactStack.Navigator>
   );
 }
@@ -68,9 +88,23 @@ function EventNavigator() {
         options={{ title: 'Events' }}
       />
       <EventStack.Screen
+        name="EventDetail"
+        component={EventDetailScreen}
+        options={{ title: 'Event Details' }}
+      />
+      <EventStack.Screen
         name="AddEditEvent"
         component={AddEditEventScreen}
         options={{ title: 'Create Event' }}
+      />
+      <EventStack.Screen
+        name="CreateEvent"
+        component={AddEditEventScreen}
+        options={({ route }: any) => ({ 
+          title: route.params?.contactName 
+            ? `Event with ${route.params.contactName}` 
+            : 'Create Event' 
+        })}
       />
     </EventStack.Navigator>
   );
@@ -151,6 +185,11 @@ function ProfileNavigator() {
         name="Insights"
         component={InsightsScreen}
         options={{ title: 'Insights & Analytics' }}
+      />
+      <SettingsStack.Screen
+        name="WritingStyle"
+        component={WritingStyleScreen}
+        options={{ title: 'My Writing Style' }}
       />
     </SettingsStack.Navigator>
   );

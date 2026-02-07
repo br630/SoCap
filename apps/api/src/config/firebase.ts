@@ -139,7 +139,17 @@ export async function verifyIdToken(token: string): Promise<admin.auth.DecodedId
       throw new FirebaseTokenError('ID token is required', 'MISSING_TOKEN');
     }
 
+    // Debug: Verify token structure
+    const parts = token.split('.');
+    console.log('🔍 Token verification:', {
+      parts: parts.length,
+      headerLen: parts[0]?.length || 0,
+      payloadLen: parts[1]?.length || 0,
+      signatureLen: parts[2]?.length || 0,
+    });
+
     const decodedToken = await getFirebaseAdmin().auth().verifyIdToken(token);
+    console.log('✅ Token verified for UID:', decodedToken.uid);
     return decodedToken;
   } catch (error: any) {
     if (error instanceof FirebaseTokenError) {

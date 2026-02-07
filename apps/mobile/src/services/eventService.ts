@@ -219,6 +219,14 @@ class EventService {
   }
 
   /**
+   * Get events where a specific contact is an attendee
+   */
+  async getEventsByContact(contactId: string): Promise<Event[]> {
+    const response = await apiClient.get<{ data: Event[] }>(`/events/contact/${contactId}`);
+    return response.data.data || [];
+  }
+
+  /**
    * Create a new event
    */
   async createEvent(data: CreateEventData): Promise<Event> {
@@ -279,6 +287,16 @@ class EventService {
     const response = await apiClient.put<{ success: boolean; attendee: EventAttendee }>(
       `/events/${eventId}/attendees/${attendeeId}/rsvp`,
       data
+    );
+    return response.data;
+  }
+
+  /**
+   * Send RSVP reminders to pending attendees
+   */
+  async sendRSVPReminders(eventId: string): Promise<{ success: boolean; message: string; reminderCount: number }> {
+    const response = await apiClient.post<{ success: boolean; message: string; reminderCount: number }>(
+      `/events/${eventId}/send-rsvp-reminders`
     );
     return response.data;
   }

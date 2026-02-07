@@ -17,7 +17,11 @@ const createEventSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   eventType: z.string().min(1, 'Event type is required'),
-  date: z.string().datetime(),
+  // Accept both ISO datetime and simple date strings (YYYY-MM-DD)
+  date: z.string().refine((val) => {
+    // Allow ISO datetime or simple date format
+    return !isNaN(Date.parse(val));
+  }, { message: 'Invalid date format' }),
   startTime: z.string(),
   endTime: z.string(),
   timezone: z.string().default('UTC'),
@@ -26,9 +30,9 @@ const createEventSchema = z.object({
   locationPlaceId: z.string().optional(),
   locationLat: z.number().optional(),
   locationLng: z.number().optional(),
-  estimatedCost: z.number().min(0),
+  estimatedCost: z.number().min(0).default(0),
   actualCost: z.number().min(0).optional(),
-  budgetTier: z.nativeEnum(BudgetTier),
+  budgetTier: z.nativeEnum(BudgetTier).default('BUDGET'),
   status: z.nativeEnum(EventStatus).optional(),
   isRecurring: z.boolean().optional(),
   recurringPattern: z.any().optional(),
@@ -36,6 +40,8 @@ const createEventSchema = z.object({
   calendarEventId: z.string().optional(),
   createSavingsGoal: z.boolean().optional(),
   savingsGoalName: z.string().optional(),
+  isAllDay: z.boolean().optional(),
+  attendeeIds: z.array(z.string()).optional(),
 });
 
 const updateEventSchema = createEventSchema.partial().extend({
@@ -90,10 +96,17 @@ export async function getEvents(req: AuthenticatedRequest, res: Response): Promi
       return;
     }
 
+    // Normalize dateFrom to start of day so today's events aren't filtered out
+    let normalizedDateFrom: Date | undefined;
+    if (dateFrom) {
+      normalizedDateFrom = new Date(dateFrom as string);
+      normalizedDateFrom.setHours(0, 0, 0, 0);
+    }
+
     const filters = {
       ...(status && { status: status as EventStatus }),
       ...(eventType && { eventType: eventType as string }),
-      ...(dateFrom && { dateFrom: new Date(dateFrom as string) }),
+      ...(normalizedDateFrom && { dateFrom: normalizedDateFrom }),
       ...(dateTo && { dateTo: new Date(dateTo as string) }),
     };
 
@@ -138,6 +151,26 @@ export async function getEventById(req: AuthenticatedRequest, res: Response): Pr
     console.error('Get event error:', error);
     res.status(500).json({
       error: 'Failed to get event',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Get events where a contact is an attendee
+ * GET /events/contact/:contactId
+ */
+export async function getEventsByContact(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
+    const { contactId } = req.params;
+
+    const events = await EventService.getEventsByContact(localUserId, contactId);
+    res.json({ data: events });
+  } catch (error) {
+    console.error('Get events by contact error:', error);
+    res.status(500).json({
+      error: 'Failed to get events for contact',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
@@ -539,6 +572,31 @@ export async function searchVenues(req: AuthenticatedRequest, res: Response): Pr
     console.error('Search venues error:', error);
     res.status(500).json({
       error: 'Failed to search venues',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Send RSVP reminders to attendees who haven't responded
+ * POST /events/:id/send-rsvp-reminders
+ */
+export async function sendRSVPReminders(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
+    const { id: eventId } = req.params;
+
+    const reminderCount = await EventService.sendRSVPReminders(eventId, localUserId);
+
+    res.json({
+      success: true,
+      message: `Sent ${reminderCount} RSVP reminder(s)`,
+      reminderCount,
+    });
+  } catch (error) {
+    console.error('Send RSVP reminders error:', error);
+    res.status(500).json({
+      error: 'Failed to send RSVP reminders',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }

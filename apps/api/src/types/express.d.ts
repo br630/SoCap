@@ -6,9 +6,13 @@ import * as admin from 'firebase-admin';
  */
 export interface AuthenticatedRequest extends Request {
   /**
-   * Firebase user UID
+   * Authenticated user information
    */
   user?: {
+    /**
+     * User ID (same as uid, for controller compatibility)
+     */
+    id: string;
     /**
      * Firebase user UID
      */

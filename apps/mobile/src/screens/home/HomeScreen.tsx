@@ -6,9 +6,8 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
-import { Text, Card, ActivityIndicator, Divider } from 'react-native-paper';
+import { Text, Card, ActivityIndicator } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useDashboard } from '../../hooks/useDashboard';
 import {
@@ -17,8 +16,9 @@ import {
   QuickActionButton,
   ContactAvatarScroll,
   MiniEventCard,
-  TipCard,
+  RelationshipTipCard,
 } from '../../components/dashboard';
+import { TrendingInterestsCard } from '../../components/interests';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -67,11 +67,6 @@ export default function HomeScreen() {
     navigation.navigate('Profile' as never, {
       screen: 'Insights',
     } as never);
-  };
-
-  const navigateToSavings = () => {
-    // Navigate to savings goals screen
-    navigation.navigate('Profile' as never);
   };
 
   if (isLoading) {
@@ -148,7 +143,10 @@ export default function HomeScreen() {
           icon="chatbubble-ellipses-outline"
           label="Log Interaction"
           onPress={() => {
-            navigation.navigate('Contacts' as never);
+            navigation.navigate('Contacts' as never, {
+              screen: 'ContactList',
+              params: { mode: 'log-interaction' },
+            } as never);
           }}
           color="#007AFF"
         />
@@ -163,16 +161,24 @@ export default function HomeScreen() {
           color="#4CAF50"
         />
         <QuickActionButton
-          icon="wallet-outline"
-          label="Add Savings"
-          onPress={navigateToSavings}
+          icon="person-add-outline"
+          label="Add Contact"
+          onPress={() => {
+            navigation.navigate('Contacts' as never, {
+              screen: 'AddEditContact',
+              params: {},
+            } as never);
+          }}
           color="#FF9800"
         />
         <QuickActionButton
-          icon="person-add-outline"
-          label="Reach Out"
+          icon="sparkles-outline"
+          label="AI Suggest"
           onPress={() => {
-            navigation.navigate('Contacts' as never);
+            navigation.navigate('Contacts' as never, {
+              screen: 'ContactList',
+              params: { mode: 'ai-suggest' },
+            } as never);
           }}
           color="#9C27B0"
         />
@@ -188,6 +194,14 @@ export default function HomeScreen() {
           />
         </View>
       )}
+
+      {/* Trending in Your Interests */}
+      <TrendingInterestsCard
+        onPressInterest={(interest) => {
+          // Navigate to contacts with this shared interest
+          navigation.navigate('Contacts' as never);
+        }}
+      />
 
       {/* Upcoming Events */}
       {data.upcomingEvents.length > 0 && (
@@ -210,51 +224,8 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Savings Progress */}
-      {data.savingsSummary.activeGoals > 0 && (
-        <Card style={styles.sectionCard}>
-          <Card.Content>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Savings Progress</Text>
-              <TouchableOpacity onPress={navigateToSavings}>
-                <Text style={styles.seeAllText}>View All</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.savingsSummary}>
-              <View style={styles.savingsRow}>
-                <Text style={styles.savingsLabel}>Total Saved</Text>
-                <Text style={styles.savingsAmount}>
-                  ${data.savingsSummary.totalSaved.toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.savingsRow}>
-                <Text style={styles.savingsLabel}>Active Goals</Text>
-                <Text style={styles.savingsValue}>
-                  {data.savingsSummary.activeGoals}
-                </Text>
-              </View>
-            </View>
-            {data.savingsSummary.nearestDeadline && (
-              <View style={styles.deadlineRow}>
-                <Ionicons name="calendar-outline" size={16} color="#666" />
-                <Text style={styles.deadlineText}>
-                  Nearest deadline:{' '}
-                  {new Date(data.savingsSummary.nearestDeadline).toLocaleDateString()}
-                </Text>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-      )}
-
-      {/* Tip of the Day */}
-      <TipCard
-        tip={data.tipOfTheDay}
-        onRefresh={handleRefresh}
-        onLearnMore={() => {
-          // Could navigate to a tips/help screen
-        }}
-      />
+      {/* AI-Powered Tip of the Day */}
+      <RelationshipTipCard fallbackTip={data.tipOfTheDay} />
     </ScrollView>
   );
 }
@@ -326,41 +297,5 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     marginHorizontal: 16,
     borderRadius: 12,
-  },
-  savingsSummary: {
-    marginTop: 8,
-  },
-  savingsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  savingsLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  savingsAmount: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#4CAF50',
-  },
-  savingsValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  deadlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  deadlineText: {
-    fontSize: 13,
-    color: '#666',
   },
 });

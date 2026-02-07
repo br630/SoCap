@@ -73,8 +73,10 @@ export interface ContactNeedingAttention {
   name: string;
   profileImage?: string;
   tier: string;
+  daysSince: number;
   daysOverdue: number;
   lastContactDate?: string;
+  neverContacted?: boolean;
 }
 
 export interface TopContact {

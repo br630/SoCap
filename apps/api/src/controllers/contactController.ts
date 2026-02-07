@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { z } from 'zod';
 import { ContactService, CreateContactData, UpdateContactData } from '../services/contactService';
 import { RelationshipService, UpdateRelationshipData } from '../services/relationshipService';
-import { InteractionService, CreateInteractionData } from '../services/interactionService';
+import { InteractionService, CreateInteractionData, AutoLogInteractionData } from '../services/interactionService';
 import { UserService } from '../services/userService';
 import { AuthenticatedRequest } from '../types/express';
 import { prisma } from '../lib/prisma';
@@ -440,6 +440,79 @@ export async function getInteractionHistory(req: AuthenticatedRequest, res: Resp
     console.error('Get interaction history error:', error);
     res.status(500).json({
       error: 'Failed to get interaction history',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Batch log interactions from auto-sync (call logs, etc.)
+ * POST /contacts/sync/interactions
+ */
+export async function batchLogInteractions(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
+
+    const batchSchema = z.object({
+      interactions: z.array(
+        z.object({
+          contactId: z.string().optional(),
+          contactPhone: z.string().optional(),
+          contactName: z.string().optional(),
+          type: z.enum(['CALL', 'TEXT', 'VIDEO_CALL', 'IN_PERSON', 'EVENT']),
+          date: z.string(),
+          duration: z.number().optional(),
+          direction: z.enum(['incoming', 'outgoing']).optional(),
+          externalId: z.string().optional(),
+        })
+      ),
+    });
+
+    const { interactions } = batchSchema.parse(req.body);
+
+    const result = await InteractionService.batchLogInteractions(
+      localUserId,
+      interactions as AutoLogInteractionData[]
+    );
+
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: 'Validation error',
+        details: error.errors,
+      });
+      return;
+    }
+
+    console.error('Batch log interactions error:', error);
+    res.status(500).json({
+      error: 'Failed to batch log interactions',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
+/**
+ * Get last sync timestamp
+ * GET /contacts/sync/last
+ */
+export async function getLastSyncTime(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const localUserId = await getLocalUserId(req.user!.uid, req.user!.email || '');
+
+    const lastSync = await InteractionService.getLastSyncTime(localUserId);
+
+    res.json({
+      lastSyncTime: lastSync?.toISOString() || null,
+    });
+  } catch (error) {
+    console.error('Get last sync time error:', error);
+    res.status(500).json({
+      error: 'Failed to get last sync time',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }

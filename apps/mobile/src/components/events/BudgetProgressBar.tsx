@@ -25,12 +25,14 @@ export default function BudgetProgressBar({
   compact = false,
 }: BudgetProgressBarProps) {
   const theme = useTheme();
-  const tierConfig = TIER_CONFIG[budgetTier];
+  const tierConfig = TIER_CONFIG[budgetTier] || TIER_CONFIG.MODERATE;
   
-  const spent = actualCost || 0;
-  const progress = estimatedCost > 0 ? Math.min(spent / estimatedCost, 1) : 0;
-  const remaining = Math.max(estimatedCost - spent, 0);
-  const isOverBudget = spent > estimatedCost;
+  // Ensure values are numbers
+  const estimated = Number(estimatedCost) || 0;
+  const spent = Number(actualCost) || 0;
+  const progress = estimated > 0 ? Math.min(spent / estimated, 1) : 0;
+  const remaining = Math.max(estimated - spent, 0);
+  const isOverBudget = spent > estimated;
 
   if (compact) {
     return (
@@ -40,7 +42,7 @@ export default function BudgetProgressBar({
           <Text style={[styles.tierText, { color: tierConfig.color }]}>{tierConfig.label}</Text>
         </View>
         <Text style={styles.compactCost}>
-          ${spent.toFixed(0)} / ${estimatedCost.toFixed(0)}
+          ${spent.toFixed(0)} / ${estimated.toFixed(0)}
         </Text>
       </View>
     );
@@ -73,7 +75,7 @@ export default function BudgetProgressBar({
       <View style={styles.details}>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Estimated</Text>
-          <Text style={styles.detailValue}>${estimatedCost.toFixed(2)}</Text>
+          <Text style={styles.detailValue}>${estimated.toFixed(2)}</Text>
         </View>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Spent</Text>
@@ -94,7 +96,7 @@ export default function BudgetProgressBar({
         <View style={styles.warningContainer}>
           <Ionicons name="warning" size={16} color="#F44336" />
           <Text style={styles.warningText}>
-            Over budget by ${(spent - estimatedCost).toFixed(2)}
+            Over budget by ${(spent - estimated).toFixed(2)}
           </Text>
         </View>
       )}

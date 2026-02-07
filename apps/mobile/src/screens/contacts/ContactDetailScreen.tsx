@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Linking, Alert, Modal, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Linking, Alert, Modal, TouchableOpacity, Platform } from 'react-native';
 import {
   Avatar,
   Text,
@@ -12,6 +12,7 @@ import {
   Dialog,
   TextInput,
   SegmentedButtons,
+  ActivityIndicator,
 } from 'react-native-paper';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useContact, useInteractionHistory } from '../../hooks/useContact';
@@ -19,22 +20,58 @@ import QuickActionButton from '../../components/contacts/QuickActionButton';
 import TierBadge from '../../components/contacts/TierBadge';
 import InteractionItem from '../../components/contacts/InteractionItem';
 import { MessageSuggestionCard, ConversationStarterList } from '../../components/ai';
+import { InterestUpdatesCard } from '../../components/interests';
 import { useContactAI } from '../../hooks/useAISuggestions';
 import { MessageContext } from '../../services/aiService';
 
 export default function ContactDetailScreen() {
   const route = useRoute();
   const navigation = useNavigation();
-  const { id } = (route.params as { id: string }) || {};
-  const [showRelationshipDialog, setShowRelationshipDialog] = useState(false);
+  const { id, openLogDialog } = (route.params as { id: string; openLogDialog?: boolean }) || {};
   const [showInteractionDialog, setShowInteractionDialog] = useState(false);
+  
+  // Auto-open log dialog if coming from "Log Interaction" quick action
+  useEffect(() => {
+    if (openLogDialog) {
+      setShowInteractionDialog(true);
+    }
+  }, [openLogDialog]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiTab, setAITab] = useState<'messages' | 'starters'>('messages');
   const [messageContext, setMessageContext] = useState<MessageContext>('check-in');
   const [interactionType, setInteractionType] = useState<'CALL' | 'TEXT' | 'VIDEO_CALL' | 'IN_PERSON' | 'EVENT'>('CALL');
   const [interactionNotes, setInteractionNotes] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
-  const { contact, isLoading, updateRelationship, logInteraction, isLoggingInteraction } = useContact(id);
+  // Quick templates for faster logging
+  const INTERACTION_TEMPLATES: Record<string, { type: 'CALL' | 'TEXT' | 'VIDEO_CALL' | 'IN_PERSON' | 'EVENT'; note: string; label: string; emoji: string }> = {
+    quickCall: { type: 'CALL', note: 'Quick catch-up call', label: 'Quick Call', emoji: '📞' },
+    longCall: { type: 'CALL', note: 'Long conversation, caught up on life', label: 'Long Chat', emoji: '📱' },
+    textCheckin: { type: 'TEXT', note: 'Sent a quick check-in message', label: 'Text Check-in', emoji: '💬' },
+    sharedMeme: { type: 'TEXT', note: 'Shared something funny/interesting', label: 'Shared Content', emoji: '😂' },
+    videoChat: { type: 'VIDEO_CALL', note: 'Video call catch-up', label: 'Video Chat', emoji: '🎥' },
+    coffee: { type: 'IN_PERSON', note: 'Grabbed coffee together', label: 'Coffee', emoji: '☕' },
+    lunch: { type: 'IN_PERSON', note: 'Had lunch/dinner together', label: 'Meal', emoji: '🍽️' },
+    hangout: { type: 'IN_PERSON', note: 'Hung out together', label: 'Hangout', emoji: '🎉' },
+    event: { type: 'EVENT', note: 'Attended an event together', label: 'Event', emoji: '🎭' },
+  };
+
+  const handleSelectTemplate = (templateKey: string) => {
+    const template = INTERACTION_TEMPLATES[templateKey];
+    if (template) {
+      setSelectedTemplate(templateKey);
+      setInteractionType(template.type);
+      setInteractionNotes(template.note);
+    }
+  };
+
+  const handleClearTemplate = () => {
+    setSelectedTemplate(null);
+    setInteractionNotes('');
+  };
+
+  const { contact, isLoading, updateRelationship, logInteraction, logInteractionAsync, isLoggingInteraction, deleteContact, isDeleting } = useContact(id);
   const { interactions } = useInteractionHistory(id, 1, 10);
   
   // AI hooks
@@ -80,11 +117,12 @@ export default function ContactDetailScreen() {
   };
 
   const handleMessage = () => {
-    if (contact.phone) {
-      Linking.openURL(`sms:${contact.phone}`);
-    } else {
-      Alert.alert('No phone number', 'This contact does not have a phone number');
-    }
+    // Navigate to in-app chat/messages screen for this contact
+    navigation.navigate('ContactMessages' as never, { 
+      contactId: id, 
+      contactName: contact.name,
+      contactPhone: contact.phone 
+    } as never);
   };
 
   const handleEmail = () => {
@@ -96,11 +134,52 @@ export default function ContactDetailScreen() {
   };
 
   const handlePlanEvent = () => {
-    navigation.navigate('AddEditEvent' as never, { contactId: id } as never);
+    // Navigate to contact's events page showing events they're part of + create option
+    navigation.navigate('ContactEvents' as never, { 
+      contactId: id, 
+      contactName: contact.name 
+    } as never);
   };
 
   const handleEdit = () => {
     navigation.navigate('AddEditContact' as never, { contactId: id } as never);
+  };
+
+  const handleDelete = () => {
+    // Use Dialog on web since Alert.alert doesn't work
+    if (Platform.OS === 'web') {
+      setShowDeleteDialog(true);
+    } else {
+      Alert.alert(
+        'Delete Contact',
+        `Are you sure you want to delete ${contact?.name}? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: confirmDelete,
+          },
+        ]
+      );
+    }
+  };
+
+  const confirmDelete = () => {
+    setShowDeleteDialog(false);
+    deleteContact(undefined, {
+      onSuccess: () => {
+        navigation.goBack();
+      },
+      onError: (error) => {
+        if (Platform.OS === 'web') {
+          window.alert('Failed to delete contact. Please try again.');
+        } else {
+          Alert.alert('Error', 'Failed to delete contact. Please try again.');
+        }
+        console.error('Delete contact error:', error);
+      },
+    });
   };
 
   const handleOpenAI = async () => {
@@ -135,14 +214,26 @@ export default function ContactDetailScreen() {
     }
   };
 
-  const handleLogInteraction = () => {
-    logInteraction({
-      type: interactionType,
-      date: new Date().toISOString(),
-      notes: interactionNotes || undefined,
-    });
-    setShowInteractionDialog(false);
-    setInteractionNotes('');
+  const handleLogInteraction = async () => {
+    try {
+      await logInteractionAsync({
+        type: interactionType,
+        date: new Date().toISOString(),
+        notes: interactionNotes || undefined,
+      });
+      setShowInteractionDialog(false);
+      setInteractionNotes('');
+      setSelectedTemplate(null);
+      
+      // Show success feedback
+      if (Platform.OS === 'web') {
+        // On web, just close the dialog - the UI will update
+      } else {
+        Alert.alert('✅ Logged!', `Interaction with ${contact?.name} recorded.`);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to log interaction. Please try again.');
+    }
   };
 
   return (
@@ -230,7 +321,7 @@ export default function ContactDetailScreen() {
               <Text variant="titleMedium" style={styles.sectionTitle}>
                 Relationship
               </Text>
-              <Button mode="text" onPress={() => setShowRelationshipDialog(true)}>
+              <Button mode="text" onPress={handleEdit}>
                 Edit
               </Button>
             </View>
@@ -267,6 +358,11 @@ export default function ContactDetailScreen() {
             )}
           </Card.Content>
         </Card>
+      )}
+
+      {/* Interest Updates - Things to Talk About */}
+      {contact?.relationship?.sharedInterests && contact.relationship.sharedInterests.length > 0 && (
+        <InterestUpdatesCard contactId={id} contactName={contact.name} />
       )}
 
       {/* Recent Interactions */}
@@ -309,37 +405,101 @@ export default function ContactDetailScreen() {
         <Button mode="contained" onPress={handleEdit} style={styles.actionButton}>
           Edit Contact
         </Button>
+        <Button 
+          mode="outlined" 
+          onPress={handleDelete} 
+          style={styles.deleteButton}
+          textColor="#F44336"
+        >
+          Delete Contact
+        </Button>
       </View>
 
       {/* Interaction Dialog */}
       <Portal>
-        <Dialog visible={showInteractionDialog} onDismiss={() => setShowInteractionDialog(false)}>
+        <Dialog visible={showInteractionDialog} onDismiss={() => setShowInteractionDialog(false)} style={styles.wideDialog}>
           <Dialog.Title>Log Interaction</Dialog.Title>
           <Dialog.Content>
+            {/* Quick Templates */}
+            <Text style={styles.templateLabel}>Quick Log:</Text>
+            <View style={styles.templatesGrid}>
+              {Object.entries(INTERACTION_TEMPLATES).map(([key, template]) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[
+                    styles.templateButton,
+                    selectedTemplate === key && styles.templateButtonActive,
+                  ]}
+                  onPress={() => handleSelectTemplate(key)}
+                >
+                  <Text style={styles.templateEmoji}>{template.emoji}</Text>
+                  <Text style={[
+                    styles.templateText,
+                    selectedTemplate === key && styles.templateTextActive,
+                  ]}>
+                    {template.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Divider style={styles.templateDivider} />
+            <Text style={styles.templateLabel}>Or customize:</Text>
+
             <SegmentedButtons
               value={interactionType}
-              onValueChange={(value) => setInteractionType(value as any)}
+              onValueChange={(value) => {
+                setInteractionType(value as any);
+                setSelectedTemplate(null);
+              }}
               buttons={[
                 { value: 'CALL', label: 'Call' },
                 { value: 'TEXT', label: 'Text' },
                 { value: 'VIDEO_CALL', label: 'Video' },
-                { value: 'IN_PERSON', label: 'In Person' },
+                { value: 'IN_PERSON', label: 'Meet' },
                 { value: 'EVENT', label: 'Event' },
               ]}
+              style={styles.segmentedButtonsSmall}
             />
             <TextInput
               label="Notes (optional)"
               value={interactionNotes}
-              onChangeText={setInteractionNotes}
+              onChangeText={(text) => {
+                setInteractionNotes(text);
+                if (selectedTemplate) setSelectedTemplate(null);
+              }}
               multiline
-              numberOfLines={3}
+              numberOfLines={2}
               style={styles.input}
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowInteractionDialog(false)}>Cancel</Button>
+            <Button onPress={() => {
+              setShowInteractionDialog(false);
+              handleClearTemplate();
+            }}>Cancel</Button>
             <Button onPress={handleLogInteraction} loading={isLoggingInteraction}>
               Log
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Delete Confirmation Dialog (for web) */}
+      <Portal>
+        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
+          <Dialog.Title>Delete Contact</Dialog.Title>
+          <Dialog.Content>
+            <Text>Are you sure you want to delete {contact?.name}? This action cannot be undone.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button 
+              onPress={confirmDelete} 
+              textColor="#F44336"
+              loading={isDeleting}
+            >
+              Delete
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -510,6 +670,10 @@ const styles = StyleSheet.create({
   actionButton: {
     marginBottom: 8,
   },
+  deleteButton: {
+    marginBottom: 8,
+    borderColor: '#F44336',
+  },
   input: {
     marginTop: 16,
   },
@@ -631,5 +795,55 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 16,
+  },
+  // Template styles for interaction logging
+  wideDialog: {
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '95%',
+  },
+  templateLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 10,
+  },
+  templatesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  templateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  templateButtonActive: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#4CAF50',
+  },
+  templateEmoji: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  templateText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  templateTextActive: {
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+  templateDivider: {
+    marginVertical: 12,
+  },
+  segmentedButtonsSmall: {
+    marginBottom: 12,
   },
 });

@@ -10,6 +10,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
 import authService from '../../services/authService';
+import { AutoSyncSettings } from '../../components/settings';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -101,6 +102,9 @@ export default function ProfileScreen() {
         </View>
       )}
 
+      {/* Auto-Sync Settings */}
+      <AutoSyncSettings />
+
       <View style={styles.section}>
         <TouchableOpacity 
           style={styles.button} 
@@ -133,6 +137,14 @@ export default function ProfileScreen() {
           }}
         >
           <Text style={styles.buttonText}>Insights & Analytics</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.button, styles.aiButton]} 
+          onPress={() => {
+            navigation.navigate('WritingStyle' as never);
+          }}
+        >
+          <Text style={styles.buttonText}>✨ My Writing Style</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={loadProfile}>
           <Text style={styles.buttonText}>Refresh Profile</Text>
@@ -254,5 +266,8 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     color: '#F44336',
+  },
+  aiButton: {
+    backgroundColor: '#7C4DFF',
   },
 });

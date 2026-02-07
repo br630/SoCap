@@ -7,6 +7,61 @@ const LAST_ACTIVITY_KEY = 'last_activity';
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const LOGOUT_ON_CLOSE_KEY = 'logout_on_close';
 
+// Cross-platform storage helper for web compatibility
+const storage = {
+  getItem: async (key: string): Promise<string | null> => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          return window.localStorage.getItem(key);
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.setItem(key, value);
+        } catch {
+          // Ignore storage errors on web
+        }
+      }
+      return;
+    }
+    try {
+      await SecureStore.setItemAsync(key, value);
+    } catch {
+      // Ignore storage errors on native
+    }
+  },
+  deleteItem: async (key: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.removeItem(key);
+        } catch {
+          // Ignore
+        }
+      }
+      return;
+    }
+    try {
+      await SecureStore.deleteItemAsync(key);
+    } catch {
+      // Ignore
+    }
+  },
+};
+
 /**
  * Session Service
  * Manages user sessions, inactivity timeout, and auto-logout
@@ -21,7 +76,7 @@ class SessionService {
    */
   async initialize(onSessionExpired: () => void): Promise<void> {
     // Load last activity time
-    const lastActivity = await SecureStore.getItemAsync(LAST_ACTIVITY_KEY);
+    const lastActivity = await storage.getItem(LAST_ACTIVITY_KEY);
     if (lastActivity) {
       this.lastActivityTime = parseInt(lastActivity, 10);
     }
@@ -36,20 +91,22 @@ class SessionService {
     this.startActivityTracking();
     this.startSessionTimeout(onSessionExpired);
 
-    // Listen to app state changes
-    AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active') {
-        // App became active - check session
-        this.checkSession(onSessionExpired);
-        this.updateActivity();
-      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
-        // App going to background
-        this.saveActivity();
-        
-        // Check if logout on close is enabled
-        this.checkLogoutOnClose();
-      }
-    });
+    // Listen to app state changes (only on native)
+    if (Platform.OS !== 'web') {
+      AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+        if (nextAppState === 'active') {
+          // App became active - check session
+          this.checkSession(onSessionExpired);
+          this.updateActivity();
+        } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+          // App going to background
+          this.saveActivity();
+          
+          // Check if logout on close is enabled
+          this.checkLogoutOnClose();
+        }
+      });
+    }
   }
 
   /**
@@ -57,7 +114,7 @@ class SessionService {
    */
   updateActivity(): void {
     this.lastActivityTime = Date.now();
-    SecureStore.setItemAsync(LAST_ACTIVITY_KEY, this.lastActivityTime.toString()).catch(
+    storage.setItem(LAST_ACTIVITY_KEY, this.lastActivityTime.toString()).catch(
       (error) => console.error('Error saving activity:', error)
     );
   }
@@ -67,7 +124,7 @@ class SessionService {
    */
   async saveActivity(): Promise<void> {
     try {
-      await SecureStore.setItemAsync(LAST_ACTIVITY_KEY, this.lastActivityTime.toString());
+      await storage.setItem(LAST_ACTIVITY_KEY, this.lastActivityTime.toString());
     } catch (error) {
       console.error('Error saving activity:', error);
     }
@@ -125,7 +182,7 @@ class SessionService {
    * Check if logout on close is enabled
    */
   async checkLogoutOnClose(): Promise<void> {
-    const logoutOnClose = await SecureStore.getItemAsync(LOGOUT_ON_CLOSE_KEY);
+    const logoutOnClose = await storage.getItem(LOGOUT_ON_CLOSE_KEY);
     if (logoutOnClose === 'true') {
       // Clear tokens when app closes
       await tokenService.clearTokens();
@@ -137,9 +194,9 @@ class SessionService {
    */
   async setLogoutOnClose(enabled: boolean): Promise<void> {
     if (enabled) {
-      await SecureStore.setItemAsync(LOGOUT_ON_CLOSE_KEY, 'true');
+      await storage.setItem(LOGOUT_ON_CLOSE_KEY, 'true');
     } else {
-      await SecureStore.deleteItemAsync(LOGOUT_ON_CLOSE_KEY);
+      await storage.deleteItem(LOGOUT_ON_CLOSE_KEY);
     }
   }
 
@@ -147,7 +204,7 @@ class SessionService {
    * Check if logout on close is enabled
    */
   async isLogoutOnCloseEnabled(): Promise<boolean> {
-    const enabled = await SecureStore.getItemAsync(LOGOUT_ON_CLOSE_KEY);
+    const enabled = await storage.getItem(LOGOUT_ON_CLOSE_KEY);
     return enabled === 'true';
   }
 
@@ -163,7 +220,7 @@ class SessionService {
    * Clear session (on logout)
    */
   async clearSession(): Promise<void> {
-    await SecureStore.deleteItemAsync(LAST_ACTIVITY_KEY);
+    await storage.deleteItem(LAST_ACTIVITY_KEY);
     this.lastActivityTime = Date.now();
     
     if (this.sessionTimeoutTimer) {

@@ -33,7 +33,7 @@ export default function TipCard({ tip, onRefresh, onLearnMore }: TipCardProps) {
             onPress={onLearnMore}
             style={styles.learnMoreButton}
             labelStyle={styles.learnMoreLabel}
-            icon="open-outline"
+            icon="open-in-new"
           >
             Learn More
           </Button>

@@ -86,7 +86,9 @@ export default function InsightsScreen() {
 
   // Prepare health score history chart data
   const healthScoreChartData = useMemo(() => {
-    if (!healthScoreHistory?.history) return null;
+    if (!healthScoreHistory?.history || healthScoreHistory.history.length === 0) {
+      return null;
+    }
 
     const history = healthScoreHistory.history;
     const labels = history.map((_, index) => {
@@ -99,11 +101,19 @@ export default function InsightsScreen() {
       return '';
     });
 
+    // Ensure we have valid score data (no null/undefined values)
+    const scores = history.map((item) => item.score ?? 0);
+    
+    // LineChart requires at least one data point
+    if (scores.length === 0) {
+      return null;
+    }
+
     return {
       labels,
       datasets: [
         {
-          data: history.map((item) => item.score),
+          data: scores,
         },
       ],
     };
@@ -158,7 +168,7 @@ export default function InsightsScreen() {
               <Text style={styles.scoreLabel}>/ 100</Text>
             </View>
           </View>
-          {healthScoreChartData && (
+          {healthScoreChartData ? (
             <LineChart
               data={healthScoreChartData}
               width={screenWidth - 64}
@@ -171,6 +181,13 @@ export default function InsightsScreen() {
               withVerticalLabels={true}
               withHorizontalLabels={true}
             />
+          ) : (
+            <View style={styles.noDataContainer}>
+              <Text style={styles.noDataText}>No health score history yet</Text>
+              <Text style={styles.noDataSubtext}>
+                Log some interactions to start tracking your relationship health
+              </Text>
+            </View>
           )}
         </Card.Content>
       </Card>
@@ -567,5 +584,23 @@ const styles = StyleSheet.create({
   neglectedTierChipText: {
     color: '#FF9800',
     fontSize: 12,
+  },
+  noDataContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  noDataText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  noDataSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
 });

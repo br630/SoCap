@@ -10,6 +10,7 @@ import aiRoutes from './routes/aiRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import securityRoutes from './routes/securityRoutes';
+import interestRoutes from './routes/interestRoutes';
 import {
   securityMiddleware,
   additionalSecurityHeaders,
@@ -19,22 +20,23 @@ import {
   notFoundHandler,
   requestLogger,
 } from './middleware';
+import { aiLimiter } from './middleware/rateLimiter';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const isDevelopment = process.env.NODE_ENV === 'development';
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
 
 // Security middleware (must be first)
 app.use(securityMiddleware());
 app.use(additionalSecurityHeaders);
 
-// CORS configuration
+// CORS configuration - allow all origins in development
 const allowedOrigins = isDevelopment
   ? true // Allow all origins in development
-  : (process.env.ALLOWED_ORIGINS?.split(',') || []);
+  : (process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:8081', 'http://localhost:3000']);
 
 app.use(
   cors({
@@ -78,10 +80,11 @@ app.use('/api/contacts', contactRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reminders', reminderRoutes);
-app.use('/api/ai', aiRoutes);
+app.use('/api/ai', aiLimiter, aiRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/security', securityRoutes);
+app.use('/api/interests', interestRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

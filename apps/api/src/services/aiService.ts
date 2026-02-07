@@ -131,11 +131,13 @@ export class AIService {
   private static getClient(): OpenAI | null {
     if (!this.openai) {
       const apiKey = process.env.OPENAI_API_KEY;
+      console.log('🔑 OpenAI API Key status:', apiKey ? `Set (${apiKey.substring(0, 10)}...)` : 'NOT SET');
       if (!apiKey) {
         console.warn('⚠️ OPENAI_API_KEY not configured. AI features will use fallback responses.');
         return null;
       }
       this.openai = new OpenAI({ apiKey });
+      console.log('✅ OpenAI client initialized');
     }
     return this.openai;
   }
@@ -221,8 +223,12 @@ export class AIService {
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     options: { maxTokens?: number; temperature?: number } = {}
   ): Promise<string | null> {
+    console.log('🌐 Calling OpenAI API...');
     const client = this.getClient();
-    if (!client) return null;
+    if (!client) {
+      console.warn('❌ No OpenAI client available');
+      return null;
+    }
 
     const { maxTokens = 500, temperature = 0.7 } = options;
     const maxRetries = 3;
@@ -230,6 +236,7 @@ export class AIService {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        console.log(`📡 OpenAI request attempt ${attempt}/${maxRetries}...`);
         const response = await client.chat.completions.create({
           model: 'gpt-4o-mini',
           messages,
@@ -237,7 +244,9 @@ export class AIService {
           temperature,
         });
 
-        return response.choices[0]?.message?.content || null;
+        const content = response.choices[0]?.message?.content || null;
+        console.log('✅ OpenAI response received:', content ? `${content.substring(0, 100)}...` : 'empty');
+        return content;
       } catch (error: any) {
         lastError = error;
         
@@ -272,6 +281,8 @@ export class AIService {
     contactId: string,
     context: MessageContext = 'general'
   ): Promise<MessageSuggestions> {
+    console.log('🤖 generateMessageSuggestions called:', { userId, contactId, context });
+    
     // Check rate limit
     const rateLimit = this.checkRateLimit(userId);
     if (!rateLimit.allowed) {
@@ -282,11 +293,15 @@ export class AIService {
     // Check cache
     const cacheKey = this.getCacheKey('message', { contactId, context });
     const cached = this.getFromCache<MessageSuggestions>(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      console.log('📦 Returning cached suggestions');
+      return cached;
+    }
 
     try {
-      // Get contact details
-      const contact = await ContactService.getContactWithDetails(contactId);
+      // Get contact details (pass both userId and contactId)
+      const contact = await ContactService.getContactWithDetails(userId, contactId);
+      console.log('👤 Contact found:', contact ? contact.name : 'NOT FOUND');
       if (!contact) return FALLBACK_MESSAGE_SUGGESTIONS;
 
       const relationship = contact.relationship;
@@ -295,31 +310,65 @@ export class AIService {
         ? Math.floor((Date.now() - new Date(lastContactDate).getTime()) / (1000 * 60 * 60 * 24))
         : null;
 
-      const systemPrompt = `You are a helpful assistant that crafts personalized messages for maintaining relationships. 
-Generate three message variations based on the relationship context provided.
+      const contextDescriptions: Record<string, string> = {
+        'birthday': 'a birthday wish - celebrate their special day',
+        'check-in': 'a casual check-in to see how they are doing',
+        'congratulations': 'congratulating them on an achievement or good news',
+        'thank-you': 'expressing gratitude and thanking them for something',
+        'reconnect': 'reconnecting after not talking for a while',
+        'holiday': 'holiday greetings and well wishes',
+        'sympathy': 'offering support during a difficult time',
+        'event-invite': 'inviting them to get together or attend an event',
+        'general': 'a general friendly message',
+      };
 
-Guidelines:
-- Keep messages authentic and not overly formal
-- Adapt tone to relationship tier (Inner Circle = casual, Acquaintance = more formal)
-- Include specific references when context allows
-- Messages should be 1-3 sentences
-- Return JSON format only`;
+      const contextDescription = contextDescriptions[context] || contextDescriptions['general'];
+      
+      // Build shared interests context with specifics
+      const sharedInterests = contact.interests as string[] || [];
+      const interestsContext = sharedInterests.length > 0
+        ? `Their shared interests with you: ${sharedInterests.join(', ')}. 
+           IMPORTANT: Naturally incorporate one of these interests into each message when relevant. 
+           For example, if they like "Football", you might mention a recent game or ask about their team.`
+        : '';
 
-      const userPrompt = `Generate message suggestions for reaching out to a contact:
+      const systemPrompt = `You are a friend helping write GENUINE, HUMAN messages - NOT a corporate assistant.
 
-Contact Name: ${contact.name}
-Relationship Tier: ${relationship?.tier || 'FRIENDS'}
-Relationship Type: ${relationship?.type || 'PERSONAL'}
-${daysSinceContact ? `Days since last contact: ${daysSinceContact}` : ''}
-${contact.interests?.length ? `Shared interests: ${(contact.interests as string[]).join(', ')}` : ''}
-Message Context: ${context}
+Your job is to help write messages that sound like they're from a real person who actually cares.
 
-Return a JSON object with three message variations:
+CRITICAL RULES:
+1. NEVER use generic phrases like "Hope all is well" or "Just wanted to reach out"
+2. NEVER sound like a customer service rep or AI
+3. Write like people ACTUALLY text their friends - with personality, humor, and warmth
+4. Use contractions naturally (you're, don't, can't, etc.)
+5. Include specific references to shared interests when available
+6. Vary sentence length and structure - real people don't write perfectly formatted messages
+7. It's OK to use casual language, slang, or even emojis for closer relationships
+8. Messages for Inner Circle should feel like texts to best friends
+9. Each tone should feel distinctly DIFFERENT, not just rephrased
+
+The context is: ${contextDescription}
+
+Return ONLY valid JSON - no explanations.`;
+
+      const userPrompt = `Write ${context.toUpperCase()} messages for my ${relationship?.tier?.replace('_', ' ')?.toLowerCase() || 'friend'} named ${contact.name}.
+
+About this person:
+- We've been ${relationship?.type?.toLowerCase() || 'friends'}
+- Our relationship level: ${relationship?.tier?.replace('_', ' ') || 'Friends'}
+${daysSinceContact ? `- Haven't talked in ${daysSinceContact} days` : ''}
+${interestsContext}
+${contact.notes ? `- Personal notes: ${contact.notes}` : ''}
+
+Write 3 genuinely different messages:
+
 {
-  "casual": "A friendly, casual message",
-  "warm": "A warm, personal message", 
-  "thoughtful": "A thoughtful, considerate message"
-}`;
+  "casual": "Write like texting a friend - brief, maybe with humor or a reference to shared interests",
+  "warm": "More heartfelt but still natural - shows you've been thinking of them",
+  "thoughtful": "Deeper, more meaningful - but still sounds like YOU wrote it, not a greeting card"
+}
+
+Remember: These should sound like a real human wrote them, not AI. Use their name if it feels natural.`;
 
       const response = await this.callOpenAI(
         [
@@ -450,31 +499,42 @@ Return a JSON array with exactly 10 ideas:
     if (cached) return cached;
 
     try {
-      const contact = await ContactService.getContactWithDetails(contactId);
+      const contact = await ContactService.getContactWithDetails(userId, contactId);
       if (!contact) return FALLBACK_CONVERSATION_STARTERS;
 
-      const systemPrompt = `You are a social skills coach helping people have meaningful conversations.
-Generate conversation starters that feel natural and lead to engaging discussions.
+      const interests = contact.interests as string[] || [];
+      const hasInterests = interests.length > 0;
 
-Guidelines:
-- Base topics on shared interests when available
-- Include an opening question and a follow-up
-- Make them feel genuine, not scripted
-- Vary the depth (light, medium, deeper)
-- Return JSON array format only`;
+      const systemPrompt = `You are helping someone have REAL conversations with their ${contact.relationship?.tier?.replace('_', ' ')?.toLowerCase() || 'friend'}.
 
-      const userPrompt = `Generate 5 conversation starters for talking with:
+CRITICAL RULES:
+1. These should sound like things a real person would actually SAY - not interview questions
+2. NEVER use phrases like "So tell me about..." or "I'd love to hear about..."
+3. Openers should feel natural, like you're just chatting
+4. Consider current events, seasons, or trending topics when relevant
+5. If they have shared interests, make SPECIFIC references to those interests
+6. Follow-ups should flow naturally, like you're genuinely curious
+7. Mix depths: some light/fun, some deeper/meaningful
+8. For close relationships, be more casual and fun
 
-Name: ${contact.name}
-${contact.interests?.length ? `Interests: ${(contact.interests as string[]).join(', ')}` : ''}
-${contact.notes ? `Notes about them: ${contact.notes}` : ''}
+Return ONLY valid JSON array - no explanations.`;
+
+      const userPrompt = `Create 5 conversation starters for ${contact.name}:
+
+${hasInterests ? `IMPORTANT - Shared interests to incorporate: ${interests.join(', ')}
+Use these interests to make conversations SPECIFIC and relevant!` : 'No specific interests noted - keep it general but genuine'}
+
+${contact.notes ? `Things I know about them: ${contact.notes}` : ''}
+Relationship closeness: ${contact.relationship?.tier?.replace('_', ' ') || 'Friends'}
 
 Return a JSON array:
 [{
-  "topic": "Topic category",
-  "opener": "Opening question or statement",
-  "followUp": "Follow-up question to deepen conversation"
-}, ...]`;
+  "topic": "What this conversation is about",
+  "opener": "A natural way to start this convo - like you'd actually say it",
+  "followUp": "What you might say next if they respond positively"
+}, ...]
+
+Make each one feel different - some fun/light, some thoughtful. ${hasInterests ? `At least 3 should reference their interests: ${interests.join(', ')}` : ''}`;
 
       const response = await this.callOpenAI(
         [
@@ -517,8 +577,8 @@ Return a JSON array:
     if (cached) return cached;
 
     try {
-      // Get user's relationship stats
-      const [contactCount, innerCircleCount, recentInteractions] = await Promise.all([
+      // Get user's relationship stats and contacts needing attention
+      const [contactCount, innerCircleCount, recentInteractions, neglectedContacts] = await Promise.all([
         prisma.contact.count({ where: { userId, isDeleted: false } }),
         prisma.relationship.count({ where: { userId, tier: 'INNER_CIRCLE' } }),
         prisma.interaction.count({
@@ -527,30 +587,67 @@ Return a JSON array:
             date: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
           },
         }),
+        // Get contacts that haven't been contacted recently
+        prisma.relationship.findMany({
+          where: {
+            userId,
+            tier: { in: ['INNER_CIRCLE', 'CLOSE_FRIENDS'] },
+            OR: [
+              { lastContactDate: { lt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) } },
+              { lastContactDate: null }
+            ]
+          },
+          include: {
+            contact: { select: { name: true } }
+          },
+          take: 3
+        })
       ]);
 
-      const systemPrompt = `You are a relationship coach providing evidence-based advice.
-Generate a helpful, actionable tip based on the user's relationship patterns.
+      const neglectedNames = neglectedContacts.map(r => r.contact.name);
+      const hasNeglectedContacts = neglectedNames.length > 0;
 
-Guidelines:
-- Keep advice practical and specific
-- Reference research when relevant
-- Include one clear action item
-- Be encouraging but realistic
-- Return JSON format only`;
+      const systemPrompt = `You are a wise relationship advisor who combines timeless wisdom with practical modern advice.
 
-      const userPrompt = `Generate a personalized relationship tip for a user with:
+Your tips should:
+1. Feel INSIGHTFUL and meaningful - not generic self-help clichés
+2. Include a relevant QUOTE, PROVERB, or piece of wisdom (from philosophy, literature, various cultures)
+3. Be specifically tailored to the user's actual situation
+4. Drive home WHY relationships matter - emotionally and practically
+5. Include ONE specific, actionable step they can take TODAY
+6. Reference research/psychology when it adds credibility
 
-Total contacts: ${contactCount}
-Inner circle relationships: ${innerCircleCount}
-Interactions this week: ${recentInteractions}
+Quotes can come from:
+- Ancient philosophers (Aristotle, Seneca, Confucius)
+- Modern thinkers and authors
+- Cultural proverbs from around the world
+- Poetry and literature
+- Psychology research findings
 
-Return a JSON object:
+Return ONLY valid JSON.`;
+
+      const userPrompt = `Create today's personalized relationship insight for someone with:
+
+Stats:
+- ${contactCount} contacts total
+- ${innerCircleCount} in their inner circle  
+- ${recentInteractions} interactions this week
+
+${hasNeglectedContacts ? `
+⚠️ IMPORTANT: These close friends/family haven't heard from them recently:
+${neglectedNames.map(n => `- ${n}`).join('\n')}
+
+The tip should gently encourage reaching out to these specific people.
+` : ''}
+
+Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}.
+
+Return:
 {
-  "title": "Short catchy title",
-  "advice": "2-3 sentences of advice",
-  "actionItem": "One specific action to take",
-  "source": "Optional: research/psychology source"
+  "title": "Compelling 3-6 word title",
+  "advice": "2-3 sentences mixing wisdom with practical insight. ${hasNeglectedContacts ? `Subtly mention that ${neglectedNames[0]} might appreciate hearing from them.` : ''} Include a relevant quote or proverb naturally woven in.",
+  "actionItem": "One specific thing to do TODAY - be concrete",
+  "source": "Attribution for quote OR relevant research finding"
 }`;
 
       const response = await this.callOpenAI(
@@ -558,7 +655,7 @@ Return a JSON object:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        { maxTokens: 300, temperature: 0.7 }
+        { maxTokens: 400, temperature: 0.8 }
       );
 
       if (!response) return FALLBACK_RELATIONSHIP_TIP;
@@ -569,7 +666,7 @@ Return a JSON object:
       const tip = JSON.parse(jsonMatch[0]) as RelationshipTip;
       
       this.setCache(cacheKey, tip);
-      await this.trackUsage(userId, 300, 'relationship_tip');
+      await this.trackUsage(userId, 400, 'relationship_tip');
 
       return tip;
     } catch (error) {

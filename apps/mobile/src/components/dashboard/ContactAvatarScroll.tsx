@@ -12,7 +12,36 @@ export default function ContactAvatarScroll({
   contacts,
   onContactPress,
 }: ContactAvatarScrollProps) {
+  // Format the time since last contact
+  const formatTimeSince = (days: number, neverContacted?: boolean): string => {
+    if (neverContacted) {
+      return 'Never';
+    }
+    if (days === 0) {
+      return 'Today';
+    }
+    if (days === 1) {
+      return '1 day';
+    }
+    if (days < 7) {
+      return `${days} days`;
+    }
+    if (days < 30) {
+      const weeks = Math.floor(days / 7);
+      return `${weeks} wk${weeks > 1 ? 's' : ''}`;
+    }
+    if (days < 365) {
+      const months = Math.floor(days / 30);
+      return `${months} mo${months > 1 ? 's' : ''}`;
+    }
+    const years = Math.floor(days / 365);
+    return `${years} yr${years > 1 ? 's' : ''}`;
+  };
+
   const renderContact = ({ item }: { item: ContactNeedingAttention }) => {
+    const daysSince = item.daysSince ?? item.daysOverdue; // Fallback to daysOverdue for backwards compatibility
+    const timeText = formatTimeSince(daysSince, item.neverContacted);
+    
     return (
       <TouchableOpacity
         style={styles.contactItem}
@@ -28,15 +57,15 @@ export default function ContactAvatarScroll({
               label={item.name.charAt(0).toUpperCase()}
             />
           )}
-          <Badge style={styles.badge} visible={item.daysOverdue > 0}>
-            {item.daysOverdue}
+          <Badge style={styles.badge} visible={daysSince > 0 || item.neverContacted}>
+            {item.neverContacted ? '!' : daysSince > 99 ? '99+' : daysSince}
           </Badge>
         </View>
         <Text style={styles.name} numberOfLines={1}>
           {item.name.split(' ')[0]}
         </Text>
         <Text style={styles.daysText}>
-          {item.daysOverdue} day{item.daysOverdue !== 1 ? 's' : ''}
+          {timeText}
         </Text>
       </TouchableOpacity>
     );

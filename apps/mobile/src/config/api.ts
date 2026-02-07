@@ -45,9 +45,22 @@ export const apiClient = axios.create({
 // Add auth token to requests
 apiClient.interceptors.request.use(
   async (config) => {
-    const token = await getStoredToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = await getStoredToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        // Debug logging in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔑 Adding auth token to request:', config.url, token.substring(0, 20) + '...');
+        }
+      } else {
+        // Debug logging when no token
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('⚠️ No auth token available for request:', config.url);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error getting auth token:', error);
     }
     return config;
   },
@@ -62,3 +75,34 @@ let getStoredToken: () => Promise<string | null> = async () => null;
 export const setTokenGetter = (fn: () => Promise<string | null>) => {
   getStoredToken = fn;
 };
+
+// Handle 401 errors - token might be expired or missing
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If we get a 401 and haven't already retried
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      // Try to get a fresh token
+      try {
+        const token = await getStoredToken();
+        if (token) {
+          // Retry the request with the new token
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return apiClient(originalRequest);
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.error('❌ 401 error: No token available to retry request');
+          }
+        }
+      } catch (refreshError) {
+        console.error('❌ Error refreshing token for retry:', refreshError);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);

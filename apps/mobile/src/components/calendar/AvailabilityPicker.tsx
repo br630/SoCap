@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Text, Card, Button, ActivityIndicator, Chip } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import calendarService, { AvailabilitySlot, AvailabilityParams } from '../../services/calendarService';
+import { DatePickerModal } from '../common';
 
 interface AvailabilityPickerProps {
   userIds: string[];
@@ -171,36 +171,32 @@ export default function AvailabilityPicker({
         </View>
       </View>
 
-      {/* Date Pickers */}
-      {showStartDatePicker && (
-        <DateTimePicker
-          value={startDate}
-          mode="date"
-          display="default"
-          minimumDate={new Date()}
-          maximumDate={endDate}
-          onChange={(event, selectedDate) => {
-            setShowStartDatePicker(false);
-            if (selectedDate) {
-              setStartDate(selectedDate);
-            }
-          }}
-        />
-      )}
-      {showEndDatePicker && (
-        <DateTimePicker
-          value={endDate}
-          mode="date"
-          display="default"
-          minimumDate={startDate}
-          onChange={(event, selectedDate) => {
-            setShowEndDatePicker(false);
-            if (selectedDate) {
-              setEndDate(selectedDate);
-            }
-          }}
-        />
-      )}
+      {/* Date Pickers - Cross-platform modals */}
+      <DatePickerModal
+        visible={showStartDatePicker}
+        value={startDate}
+        mode="date"
+        title="Select Start Date"
+        minimumDate={new Date()}
+        maximumDate={endDate}
+        onConfirm={(selectedDate) => {
+          setStartDate(selectedDate);
+          setShowStartDatePicker(false);
+        }}
+        onCancel={() => setShowStartDatePicker(false)}
+      />
+      <DatePickerModal
+        visible={showEndDatePicker}
+        value={endDate}
+        mode="date"
+        title="Select End Date"
+        minimumDate={startDate}
+        onConfirm={(selectedDate) => {
+          setEndDate(selectedDate);
+          setShowEndDatePicker(false);
+        }}
+        onCancel={() => setShowEndDatePicker(false)}
+      />
 
       {/* Availability Slots */}
       {isLoading ? (

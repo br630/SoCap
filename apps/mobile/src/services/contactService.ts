@@ -58,6 +58,11 @@ export interface ContactFilters {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface ImportantEvent {
+  name: string;
+  date: string;
+}
+
 export interface CreateContactData {
   name: string;
   phone?: string;
@@ -66,6 +71,7 @@ export interface CreateContactData {
   birthday?: string;
   anniversary?: string;
   notes?: string;
+  importantEvents?: ImportantEvent[];
   importSource: 'PHONE' | 'MANUAL' | 'SOCIAL';
 }
 
@@ -77,6 +83,7 @@ export interface UpdateContactData {
   birthday?: string;
   anniversary?: string;
   notes?: string;
+  importantEvents?: ImportantEvent[];
   importSource?: 'PHONE' | 'MANUAL' | 'SOCIAL';
 }
 

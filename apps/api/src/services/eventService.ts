@@ -315,6 +315,42 @@ export class EventService {
   }
 
   /**
+   * Get events where a specific contact is an attendee
+   */
+  static async getEventsByContact(userId: string, contactId: string): Promise<Event[]> {
+    try {
+      const events = await prisma.event.findMany({
+        where: {
+          userId,
+          attendees: {
+            some: {
+              contactId,
+            },
+          },
+        },
+        include: {
+          attendees: {
+            where: { contactId },
+            select: {
+              rsvpStatus: true,
+            },
+          },
+        },
+        orderBy: { date: 'asc' },
+      });
+
+      // Flatten the attendee RSVP status onto the event
+      return events.map((event) => ({
+        ...event,
+        rsvpStatus: event.attendees[0]?.rsvpStatus,
+        attendees: undefined, // Remove the nested attendees array
+      })) as Event[];
+    } catch (error) {
+      throw new Error(`Failed to get events by contact: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get event by ID with full attendee list and details
    */
   static async getEventById(userId: string, eventId: string): Promise<Event | null> {
@@ -753,12 +789,104 @@ export class EventService {
         },
       });
 
+      // Auto-confirm event if all attendees have confirmed
+      if (data.status === 'CONFIRMED' && event.status === 'PLANNING') {
+        await this.checkAndAutoConfirmEvent(eventId);
+      }
+
       return updated;
     } catch (error) {
       if (error instanceof Error && (error.message === 'Event not found' || error.message === 'Attendee not found')) {
         throw error;
       }
       throw new Error(`Failed to update RSVP: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Check if all attendees have confirmed and auto-confirm the event
+   */
+  static async checkAndAutoConfirmEvent(eventId: string): Promise<boolean> {
+    try {
+      const attendees = await prisma.eventAttendee.findMany({
+        where: { eventId },
+      });
+
+      // If no attendees, don't auto-confirm
+      if (attendees.length === 0) {
+        return false;
+      }
+
+      // Check if all attendees have confirmed
+      const allConfirmed = attendees.every(a => a.rsvpStatus === 'CONFIRMED');
+
+      if (allConfirmed) {
+        await prisma.event.update({
+          where: { id: eventId },
+          data: { status: 'CONFIRMED' },
+        });
+        console.log(`✅ Event ${eventId} auto-confirmed: all ${attendees.length} attendees confirmed`);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Failed to auto-confirm event:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Send RSVP reminder to attendees who haven't responded
+   */
+  static async sendRSVPReminders(eventId: string, userId: string): Promise<number> {
+    try {
+      // Get pending attendees
+      const pendingAttendees = await prisma.eventAttendee.findMany({
+        where: {
+          eventId,
+          rsvpStatus: 'PENDING',
+        },
+        include: {
+          contact: true,
+          event: true,
+        },
+      });
+
+      // Create reminders for each pending attendee
+      let reminderCount = 0;
+      for (const attendee of pendingAttendees) {
+        // Check if a reminder already exists for this attendee
+        const existingReminder = await prisma.reminder.findFirst({
+          where: {
+            eventId,
+            contactId: attendee.contactId,
+            type: 'RSVP_FOLLOWUP',
+            status: 'PENDING',
+          },
+        });
+
+        if (!existingReminder) {
+          await prisma.reminder.create({
+            data: {
+              userId,
+              eventId,
+              contactId: attendee.contactId,
+              type: 'RSVP_FOLLOWUP',
+              title: `RSVP Reminder: ${attendee.event.title}`,
+              message: `${attendee.contact.name} hasn't responded to your invitation for "${attendee.event.title}" on ${new Date(attendee.event.date).toLocaleDateString()}`,
+              scheduledDate: new Date(), // Send immediately or schedule for later
+              status: 'PENDING',
+            },
+          });
+          reminderCount++;
+        }
+      }
+
+      return reminderCount;
+    } catch (error) {
+      console.error('Failed to send RSVP reminders:', error);
+      throw error;
     }
   }
 

@@ -9,6 +9,8 @@ import {
   updateRelationship,
   logInteraction,
   getInteractionHistory,
+  batchLogInteractions,
+  getLastSyncTime,
 } from '../controllers/contactController';
 import { authMiddleware } from '../middleware/auth';
 
@@ -38,6 +40,20 @@ router.post('/', createContact);
  * @access  Private
  */
 router.post('/import', importContacts);
+
+/**
+ * @route   POST /contacts/sync/interactions
+ * @desc    Batch log interactions from call logs, etc.
+ * @access  Private
+ */
+router.post('/sync/interactions', batchLogInteractions);
+
+/**
+ * @route   GET /contacts/sync/last
+ * @desc    Get the last sync timestamp
+ * @access  Private
+ */
+router.get('/sync/last', getLastSyncTime);
 
 /**
  * @route   GET /contacts/:id

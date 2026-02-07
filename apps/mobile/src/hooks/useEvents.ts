@@ -69,6 +69,23 @@ export function useCalendarEvents(year: number, month: number) {
   };
 }
 
+// ============ useContactEvents Hook ============
+export function useContactEvents(contactId: string | undefined) {
+  const query = useQuery({
+    queryKey: ['contactEvents', contactId],
+    queryFn: () => eventService.getEventsByContact(contactId!),
+    enabled: !!contactId,
+  });
+
+  return {
+    events: query.data || [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
+  };
+}
+
 // ============ useEvent Hook ============
 export function useEvent(id: string | undefined) {
   const queryClient = useQueryClient();

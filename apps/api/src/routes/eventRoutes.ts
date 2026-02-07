@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getEvents,
   getEventById,
+  getEventsByContact,
   createEvent,
   updateEvent,
   deleteEvent,
@@ -9,6 +10,7 @@ import {
   addAttendees,
   removeAttendee,
   updateRSVP,
+  sendRSVPReminders,
   getEventTemplatesHandler,
   searchVenues,
 } from '../controllers/eventController';
@@ -52,6 +54,13 @@ router.get('/templates', getEventTemplatesHandler);
  * @access  Private
  */
 router.get('/venues/search', searchVenues);
+
+/**
+ * @route   GET /events/contact/:contactId
+ * @desc    Get all events where a contact is an attendee
+ * @access  Private
+ */
+router.get('/contact/:contactId', getEventsByContact);
 
 /**
  * @route   GET /events/:id
@@ -105,5 +114,12 @@ router.delete('/:id/attendees/:attendeeId', removeAttendee);
  * @access  Private
  */
 router.put('/:id/attendees/:attendeeId/rsvp', updateRSVP);
+
+/**
+ * @route   POST /events/:id/send-rsvp-reminders
+ * @desc    Send RSVP reminders to attendees who haven't responded
+ * @access  Private
+ */
+router.post('/:id/send-rsvp-reminders', sendRSVPReminders);
 
 export default router;

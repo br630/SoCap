@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Share,
   Linking,
+  Modal,
+  Pressable,
 } from 'react-native';
 import {
   Text,
@@ -29,7 +31,7 @@ import {
   AttendeeAvatar,
   RSVPStatusBadge,
 } from '../../components/events';
-import { EventAttendee, EventStatus } from '../../services/eventService';
+import eventService, { EventAttendee, EventStatus } from '../../services/eventService';
 
 const STATUS_CONFIG: Record<EventStatus, { color: string; icon: string; label: string }> = {
   DRAFT: { color: '#9E9E9E', icon: 'document-outline', label: 'Draft' },
@@ -39,6 +41,14 @@ const STATUS_CONFIG: Record<EventStatus, { color: string; icon: string; label: s
   CANCELLED: { color: '#F44336', icon: 'close-circle', label: 'Cancelled' },
 };
 
+const ALL_STATUSES: { value: EventStatus; label: string }[] = [
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'PLANNING', label: 'Planning' },
+  { value: 'CONFIRMED', label: 'Confirmed' },
+  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+];
+
 export default function EventDetailScreen() {
   const route = useRoute();
   const navigation = useNavigation();
@@ -46,14 +56,42 @@ export default function EventDetailScreen() {
 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [sendingReminders, setSendingReminders] = useState(false);
 
   const { event, isLoading, isError, refetch } = useEvent(id);
-  const { cancelEvent, isCancelling, removeAttendee, isRemovingAttendee } = useEventMutations();
+  const { cancelEvent, isCancelling, removeAttendee, isRemovingAttendee, updateEvent, isUpdating } = useEventMutations();
 
   const handleEdit = useCallback(() => {
     setMenuVisible(false);
     navigation.navigate('CreateEvent' as never, { eventId: id, mode: 'edit' } as never);
   }, [navigation, id]);
+
+  const handleStatusChange = useCallback(async (newStatus: EventStatus) => {
+    try {
+      await updateEvent({ id, data: { status: newStatus } });
+      setStatusModalVisible(false);
+      refetch();
+      Alert.alert('Success', `Event status updated to ${newStatus}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update event status');
+    }
+  }, [updateEvent, id, refetch]);
+
+  const handleSendRSVPReminders = useCallback(async () => {
+    setSendingReminders(true);
+    try {
+      const response = await eventService.sendRSVPReminders(id);
+      Alert.alert(
+        'Reminders Sent',
+        `Sent ${response.reminderCount} reminder(s) to pending attendees.`
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send RSVP reminders');
+    } finally {
+      setSendingReminders(false);
+    }
+  }, [id]);
 
   const handleCancel = useCallback(async () => {
     try {
@@ -139,7 +177,7 @@ export default function EventDetailScreen() {
     );
   }
 
-  const statusConfig = STATUS_CONFIG[event.status];
+  const statusConfig = STATUS_CONFIG[event.status] || STATUS_CONFIG.PLANNING;
   const eventDate = new Date(event.date);
   const isPastEvent = eventDate < new Date();
   const isCancelled = event.status === 'CANCELLED';
@@ -161,11 +199,15 @@ export default function EventDetailScreen() {
         {/* Header Card */}
         <Card style={styles.headerCard}>
           <Card.Content>
-            {/* Status Badge */}
-            <View style={[styles.statusBadge, { backgroundColor: statusConfig.color }]}>
+            {/* Status Badge - Clickable */}
+            <TouchableOpacity 
+              style={[styles.statusBadge, { backgroundColor: statusConfig.color }]}
+              onPress={() => setStatusModalVisible(true)}
+            >
               <Ionicons name={statusConfig.icon as any} size={14} color="#fff" />
               <Text style={styles.statusText}>{statusConfig.label}</Text>
-            </View>
+              <Ionicons name="chevron-down" size={12} color="#fff" />
+            </TouchableOpacity>
 
             {/* Title */}
             <Text style={styles.title}>{event.title}</Text>
@@ -264,13 +306,14 @@ export default function EventDetailScreen() {
         )}
 
         {/* Budget Card */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <BudgetProgressBar
-              estimatedCost={event.estimatedCost}
-              actualCost={event.actualCost}
-              budgetTier={event.budgetTier}
-            />
+        {event.budgetTier && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <BudgetProgressBar
+                estimatedCost={event.estimatedCost || 0}
+                actualCost={event.actualCost}
+                budgetTier={event.budgetTier}
+              />
 
             {/* Linked Savings Goal */}
             {event.linkedSavingsGoalId && event.savingsGoals && event.savingsGoals.length > 0 && (
@@ -287,6 +330,7 @@ export default function EventDetailScreen() {
             )}
           </Card.Content>
         </Card>
+        )}
 
         {/* Attendees Card */}
         <Card style={styles.card}>
@@ -327,6 +371,20 @@ export default function EventDetailScreen() {
               <Text style={styles.totalGuests}>
                 Total expected: {totalGuests} guest{totalGuests !== 1 ? 's' : ''} (including +1s)
               </Text>
+            )}
+
+            {/* Send RSVP Reminders button */}
+            {rsvpCounts.pending > 0 && !isPastEvent && !isCancelled && (
+              <TouchableOpacity
+                style={styles.sendRemindersButton}
+                onPress={handleSendRSVPReminders}
+                disabled={sendingReminders}
+              >
+                <Ionicons name="notifications-outline" size={18} color="#FF9800" />
+                <Text style={styles.sendRemindersText}>
+                  {sendingReminders ? 'Sending...' : `Send RSVP Reminders (${rsvpCounts.pending} pending)`}
+                </Text>
+              </TouchableOpacity>
             )}
 
             <Divider style={styles.divider} />
@@ -399,6 +457,60 @@ export default function EventDetailScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      {/* Status Change Modal */}
+      <Modal
+        visible={statusModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setStatusModalVisible(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setStatusModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Change Event Status</Text>
+            <Text style={styles.modalSubtitle}>{event.title}</Text>
+            
+            {ALL_STATUSES.map((status) => {
+              const config = STATUS_CONFIG[status.value];
+              return (
+                <TouchableOpacity
+                  key={status.value}
+                  style={[
+                    styles.statusOption,
+                    event.status === status.value && styles.statusOptionSelected,
+                  ]}
+                  onPress={() => handleStatusChange(status.value)}
+                  disabled={isUpdating}
+                >
+                  <Ionicons name={config.icon as any} size={20} color={config.color} />
+                  <Text style={[styles.statusOptionText, { color: config.color }]}>
+                    {status.label}
+                  </Text>
+                  {event.status === status.value && (
+                    <Ionicons name="checkmark" size={20} color={config.color} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+
+            <View style={styles.modalDivider} />
+            
+            <Text style={styles.autoConfirmNote}>
+              💡 Events auto-confirm when all invitees RSVP "Confirmed"
+            </Text>
+
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setStatusModalVisible(false)}
+            >
+              <Text style={styles.modalCancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -637,5 +749,83 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  sendRemindersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  sendRemindersText: {
+    color: '#FF9800',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '85%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: '#f5f5f5',
+    gap: 12,
+  },
+  statusOptionSelected: {
+    backgroundColor: '#E3F2FD',
+  },
+  statusOptionText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 16,
+  },
+  autoConfirmNote: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  modalCancel: {
+    padding: 14,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
   },
 });

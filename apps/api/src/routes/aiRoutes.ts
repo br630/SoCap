@@ -12,6 +12,12 @@ import {
 
 const router = Router();
 
+// Debug: Log when AI router receives any request
+router.use((req, res, next) => {
+  console.log('🤖 AI Router hit:', req.method, req.path);
+  next();
+});
+
 // All routes require authentication
 router.use(authMiddleware);
 
@@ -56,14 +62,15 @@ router.get('/relationship-tip', getRelationshipTip);
 router.post('/feedback', submitFeedback);
 
 /**
- * @route   GET /ai/usage
+ * @route   GET /ai/usage or /ai/usage-stats
  * @desc    Get AI usage stats for the current user
  * @access  Private
  */
 router.get('/usage', getUsageStats);
+router.get('/usage-stats', getUsageStats); // Alias for frontend compatibility
 
 /**
- * @route   GET /ai/history
+ * @route   GET /ai/history or /ai/insight-history
  * @desc    Get user's AI insights history
  * @access  Private
  * @query   type? - Filter by insight type
@@ -72,5 +79,6 @@ router.get('/usage', getUsageStats);
  * @query   limit? - Items per page (default: 20)
  */
 router.get('/history', getInsightHistory);
+router.get('/insight-history', getInsightHistory); // Alias for frontend compatibility
 
 export default router;

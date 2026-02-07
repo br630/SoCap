@@ -6,11 +6,11 @@ import { Request, Response, NextFunction } from 'express';
  * Sets various HTTP headers to help protect the app from common vulnerabilities
  */
 export function securityMiddleware() {
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
 
   return helmet({
-    // Content Security Policy
-    contentSecurityPolicy: {
+    // Content Security Policy - disabled in development for easier debugging
+    contentSecurityPolicy: isDevelopment ? false : {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"], // Allow inline styles for React
@@ -21,9 +21,15 @@ export function securityMiddleware() {
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"],
-        upgradeInsecureRequests: isDevelopment ? [] : [], // Enable in production
+        upgradeInsecureRequests: [],
       },
     },
+    // Cross-Origin-Resource-Policy - allow cross-origin in development
+    crossOriginResourcePolicy: isDevelopment ? { policy: 'cross-origin' } : { policy: 'same-origin' },
+    // Cross-Origin-Opener-Policy - relax in development
+    crossOriginOpenerPolicy: isDevelopment ? false : { policy: 'same-origin' },
+    // Cross-Origin-Embedder-Policy - disable in development
+    crossOriginEmbedderPolicy: isDevelopment ? false : true,
     // X-Frame-Options: Prevent clickjacking
     frameguard: {
       action: 'deny',
@@ -39,7 +45,7 @@ export function securityMiddleware() {
     // Permissions-Policy: Control browser features
     permittedCrossDomainPolicies: false,
     // HSTS: Force HTTPS (only in production)
-    hsts: {
+    hsts: isDevelopment ? false : {
       maxAge: 31536000, // 1 year
       includeSubDomains: true,
       preload: true,

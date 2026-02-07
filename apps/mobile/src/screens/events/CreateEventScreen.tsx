@@ -20,8 +20,8 @@ import {
 } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useEventMutations, useEventTemplates, useEvent } from '../../hooks/useEvents';
+import { DatePickerModal } from '../../components/common';
 import { EventTemplateCard, BudgetTierBadge } from '../../components/events';
 import {
   BudgetTier,
@@ -484,49 +484,45 @@ export default function CreateEventScreen() {
               </View>
             )}
 
-            {/* Date/Time Pickers */}
-            {showDatePicker && (
-              <DateTimePicker
-                value={date}
-                mode="date"
-                display="default"
-                minimumDate={new Date()}
-                onChange={(event, selectedDate) => {
-                  setShowDatePicker(false);
-                  if (selectedDate) setDate(selectedDate);
-                }}
-              />
-            )}
-            {showStartTimePicker && (
-              <DateTimePicker
-                value={new Date(`2000-01-01T${startTime}`)}
-                mode="time"
-                display="default"
-                onChange={(event, selectedTime) => {
-                  setShowStartTimePicker(false);
-                  if (selectedTime) {
-                    const hours = selectedTime.getHours().toString().padStart(2, '0');
-                    const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
-                    setStartTime(`${hours}:${minutes}`);
-                  }
-                }}
-              />
-            )}
-            {showEndTimePicker && (
-              <DateTimePicker
-                value={new Date(`2000-01-01T${endTime}`)}
-                mode="time"
-                display="default"
-                onChange={(event, selectedTime) => {
-                  setShowEndTimePicker(false);
-                  if (selectedTime) {
-                    const hours = selectedTime.getHours().toString().padStart(2, '0');
-                    const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
-                    setEndTime(`${hours}:${minutes}`);
-                  }
-                }}
-              />
-            )}
+            {/* Date/Time Pickers - Cross-platform modals */}
+            <DatePickerModal
+              visible={showDatePicker}
+              value={date}
+              mode="date"
+              title="Select Date"
+              minimumDate={new Date()}
+              onConfirm={(selectedDate) => {
+                setDate(selectedDate);
+                setShowDatePicker(false);
+              }}
+              onCancel={() => setShowDatePicker(false)}
+            />
+            <DatePickerModal
+              visible={showStartTimePicker}
+              value={new Date(`2000-01-01T${startTime}`)}
+              mode="time"
+              title="Select Start Time"
+              onConfirm={(selectedTime) => {
+                const hours = selectedTime.getHours().toString().padStart(2, '0');
+                const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+                setStartTime(`${hours}:${minutes}`);
+                setShowStartTimePicker(false);
+              }}
+              onCancel={() => setShowStartTimePicker(false)}
+            />
+            <DatePickerModal
+              visible={showEndTimePicker}
+              value={new Date(`2000-01-01T${endTime}`)}
+              mode="time"
+              title="Select End Time"
+              onConfirm={(selectedTime) => {
+                const hours = selectedTime.getHours().toString().padStart(2, '0');
+                const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+                setEndTime(`${hours}:${minutes}`);
+                setShowEndTimePicker(false);
+              }}
+              onCancel={() => setShowEndTimePicker(false)}
+            />
           </ScrollView>
         );
 

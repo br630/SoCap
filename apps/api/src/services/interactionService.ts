@@ -10,6 +10,23 @@ export interface CreateInteractionData {
   sentiment?: Sentiment;
 }
 
+export interface AutoLogInteractionData {
+  contactId?: string;
+  contactPhone?: string;
+  contactName?: string;
+  type: InteractionType;
+  date: string; // ISO string
+  duration?: number;
+  direction?: 'incoming' | 'outgoing';
+  externalId?: string; // Unique ID from call log to prevent duplicates
+}
+
+export interface BatchLogResult {
+  created: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface InteractionStats {
   total: number;
   byType: Record<InteractionType, number>;
@@ -92,6 +109,119 @@ export class InteractionService {
         `Failed to get interaction history: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
+  }
+
+  /**
+   * Batch log interactions from auto-sync (call logs, etc.)
+   */
+  static async batchLogInteractions(
+    userId: string,
+    interactions: AutoLogInteractionData[]
+  ): Promise<BatchLogResult> {
+    const result: BatchLogResult = {
+      created: 0,
+      skipped: 0,
+      errors: [],
+    };
+
+    for (const interaction of interactions) {
+      try {
+        // Find the contact by ID, phone, or name
+        let contact = null;
+
+        if (interaction.contactId) {
+          contact = await prisma.contact.findFirst({
+            where: { id: interaction.contactId, userId },
+            include: { relationship: true },
+          });
+        } else if (interaction.contactPhone) {
+          // Normalize phone number (remove non-digits)
+          const normalizedPhone = interaction.contactPhone.replace(/\D/g, '');
+          contact = await prisma.contact.findFirst({
+            where: {
+              userId,
+              OR: [
+                { phone: { contains: normalizedPhone.slice(-10) } },
+                { phone: interaction.contactPhone },
+              ],
+            },
+            include: { relationship: true },
+          });
+        }
+
+        if (!contact || !contact.relationship) {
+          // Skip if no matching contact found
+          result.skipped++;
+          continue;
+        }
+
+        // Check for duplicate using externalId if provided
+        if (interaction.externalId) {
+          const existing = await prisma.interaction.findFirst({
+            where: {
+              relationshipId: contact.relationship.id,
+              notes: { contains: `[auto:${interaction.externalId}]` },
+            },
+          });
+
+          if (existing) {
+            result.skipped++;
+            continue;
+          }
+        }
+
+        // Create the interaction
+        const notes = [
+          interaction.direction ? `${interaction.direction} ${interaction.type.toLowerCase()}` : null,
+          interaction.externalId ? `[auto:${interaction.externalId}]` : '[auto-logged]',
+        ]
+          .filter(Boolean)
+          .join(' ');
+
+        await prisma.interaction.create({
+          data: {
+            relationshipId: contact.relationship.id,
+            type: interaction.type,
+            date: new Date(interaction.date),
+            duration: interaction.duration,
+            notes,
+            sentiment: 'NEUTRAL',
+          },
+        });
+
+        // Update relationship's last contact date
+        await prisma.relationship.update({
+          where: { id: contact.relationship.id },
+          data: {
+            lastContactDate: new Date(interaction.date),
+            updatedAt: new Date(),
+          },
+        });
+
+        result.created++;
+      } catch (error) {
+        result.errors.push(
+          `Failed to log interaction: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get last sync timestamp for a user
+   */
+  static async getLastSyncTime(userId: string): Promise<Date | null> {
+    const lastAutoInteraction = await prisma.interaction.findFirst({
+      where: {
+        relationship: { userId },
+        notes: { contains: '[auto' },
+      },
+      orderBy: { date: 'desc' },
+    });
+
+    return lastAutoInteraction?.date || null;
   }
 
   /**
