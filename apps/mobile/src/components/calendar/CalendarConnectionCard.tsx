@@ -110,7 +110,7 @@ export default function CalendarConnectionCard({
             <Ionicons
               name={status.connected ? 'calendar' : 'calendar-outline'}
               size={24}
-              color={status.connected ? '#4CAF50' : '#666'}
+              color={status.connected ? '#34C759' : '#666'}
             />
             <View style={styles.headerText}>
               <Text style={styles.title}>Google Calendar</Text>
@@ -223,12 +223,12 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#34C759',
   },
   statusText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: '#34C759',
   },
   infoRow: {
     flexDirection: 'row',

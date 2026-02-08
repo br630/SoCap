@@ -24,8 +24,7 @@ export default function ContactsScreen() {
       setLoading(true);
       const response = await contactService.getContacts(
         searchQuery ? { search: searchQuery } : undefined,
-        1,
-        50
+        { page: 1, limit: 50 }
       );
       setContacts(response.data);
     } catch (error) {

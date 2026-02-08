@@ -8,8 +8,10 @@ import {
 } from '../services/eventService';
 import { NotificationService } from '../services/notificationService';
 import { UserService } from '../services/userService';
+import { sendEventCancellationEmails } from '../services/emailService';
 import { AuthenticatedRequest } from '../types/express';
 import { BudgetTier, EventStatus, RSVPStatus } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { getEventTemplates, getTemplateById, getTemplatesByCategory, getTemplateCategories } from '../config/eventTemplates';
 
 // Validation schemas
@@ -306,7 +308,16 @@ export async function cancelEvent(req: AuthenticatedRequest, res: Response): Pro
 
     const { event, attendeeUserIds } = await EventService.cancelEvent(localUserId, id);
 
-    // Send notifications to attendees
+    // Get organizer name for emails
+    const organizer = await prisma.user.findUnique({
+      where: { id: localUserId },
+      select: { firstName: true, lastName: true },
+    });
+    const organizerName = organizer
+      ? `${organizer.firstName} ${organizer.lastName}`
+      : 'The organizer';
+
+    // Send push notifications to attendees
     if (attendeeUserIds.length > 0) {
       for (const userId of attendeeUserIds) {
         try {
@@ -322,11 +333,32 @@ export async function cancelEvent(req: AuthenticatedRequest, res: Response): Pro
       }
     }
 
+    // Send cancellation emails to all attendees with email addresses
+    const attendeesForEmail = (event.attendees || []).map((a: any) => ({
+      name: a.contact?.name || 'Guest',
+      email: a.contact?.email || null,
+    }));
+
+    let emailResult = { sent: 0, failed: 0 };
+    if (attendeesForEmail.length > 0) {
+      try {
+        emailResult = await sendEventCancellationEmails(
+          event.title,
+          event.date,
+          organizerName,
+          attendeesForEmail
+        );
+      } catch (emailError) {
+        console.error('Failed to send cancellation emails:', emailError);
+      }
+    }
+
     res.json({
       success: true,
       message: 'Event cancelled successfully',
       event,
       notificationsSent: attendeeUserIds.length,
+      emailsSent: emailResult.sent,
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'Event not found') {

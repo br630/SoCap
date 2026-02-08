@@ -8,10 +8,12 @@ export type AuthStackParamList = {
 };
 
 export type ContactStackParamList = {
-  ContactList: undefined;
-  ContactDetail: { id: string };
+  ContactList: { mode?: 'log-interaction' | 'ai-suggest' } | undefined;
+  ContactDetail: { id: string; openLogDialog?: boolean };
   AddEditContact: { contactId?: string };
   ImportContacts: undefined;
+  ContactMessages: { contactId: string; contactName: string; contactPhone?: string };
+  ContactEvents: { contactId: string; contactName: string };
 };
 
 export type EventStackParamList = {
@@ -28,6 +30,7 @@ export type SettingsStackParamList = {
   CalendarSettings: undefined;
   Insights: undefined;
   SecuritySettings: undefined;
+  WritingStyle: undefined;
 };
 
 export type MainTabParamList = {

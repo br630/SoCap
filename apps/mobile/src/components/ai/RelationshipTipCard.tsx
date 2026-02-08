@@ -41,21 +41,21 @@ function getCategoryEmoji(category: string): string {
 function getCategoryColor(category: string): string {
   switch (category.toUpperCase()) {
     case 'CONNECTION':
-      return '#4CAF50';
+      return '#34C759';
     case 'COMMUNICATION':
-      return '#2196F3';
+      return '#5AC8FA';
     case 'APPRECIATION':
       return '#E91E63';
     case 'QUALITY_TIME':
-      return '#FF9800';
+      return '#FF9500';
     case 'GROWTH':
       return '#8BC34A';
     case 'BOUNDARIES':
       return '#9C27B0';
     case 'CONFLICT':
-      return '#607D8B';
+      return '#8E8E93';
     default:
-      return '#7C4DFF';
+      return '#5856D6';
   }
 }
 
@@ -90,7 +90,7 @@ export function RelationshipTipCard({
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#7C4DFF" />
+          <ActivityIndicator size="small" color="#5856D6" />
           <Text style={styles.loadingText}>Getting today's tip...</Text>
         </View>
       </View>
@@ -149,7 +149,7 @@ export function RelationshipTipCard({
             <Text style={styles.sourceText} numberOfLines={1}>
               {tip.researchSource}
             </Text>
-            <Ionicons name="open-outline" size={12} color="#7C4DFF" />
+            <Ionicons name="open-outline" size={12} color="#5856D6" />
           </TouchableOpacity>
         </View>
       )}
@@ -157,7 +157,7 @@ export function RelationshipTipCard({
       <View style={styles.actions}>
         {onRefresh && (
           <TouchableOpacity style={styles.actionButton} onPress={onRefresh}>
-            <Ionicons name="refresh-outline" size={16} color="#7C4DFF" />
+            <Ionicons name="refresh-outline" size={16} color="#5856D6" />
             <Text style={styles.actionText}>New Tip</Text>
           </TouchableOpacity>
         )}
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 13,
-    color: '#7C4DFF',
+    color: '#5856D6',
     fontWeight: '500',
   },
   loadingContainer: {
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
     borderRadius: 8,
   },
   refreshButtonText: {

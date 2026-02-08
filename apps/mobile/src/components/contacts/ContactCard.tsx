@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { Card, Avatar, Text, useTheme } from 'react-native-paper';
+import { Text } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
 import { Contact } from '../../services/contactService';
 import TierBadge from './TierBadge';
+import { colors, shadows, radii, spacing } from '../../theme/paperTheme';
 
 interface ContactCardProps {
   contact: Contact;
@@ -10,7 +12,6 @@ interface ContactCardProps {
 }
 
 export default function ContactCard({ contact, onPress }: ContactCardProps) {
-  const theme = useTheme();
   const initials = contact.name
     .split(' ')
     .map((n) => n[0])
@@ -29,90 +30,108 @@ export default function ContactCard({ contact, onPress }: ContactCardProps) {
 
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return `${Math.floor(diffDays / 365)} years ago`;
+    if (diffDays < 7) return `${diffDays} days`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''}`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''}`;
+    return `${Math.floor(diffDays / 365)} year${Math.floor(diffDays / 365) > 1 ? 's' : ''}`;
   };
+
+  const isOverdue = lastContactDate && (() => {
+    const diffDays = Math.floor((new Date().getTime() - lastContactDate.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays >= 21; // 3 weeks
+  })();
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <Card style={styles.card}>
-        <Card.Content style={styles.content}>
-          <Avatar.Image
-            size={56}
-            source={contact.profileImage ? { uri: contact.profileImage } : undefined}
-            label={!contact.profileImage ? initials : undefined}
-            style={styles.avatar}
-          />
-          <View style={styles.info}>
-            <View style={styles.header}>
-              <Text variant="titleMedium" style={styles.name}>
-                {contact.name}
-              </Text>
-              {contact.relationship && (
-                <TierBadge tier={contact.relationship.tier} size="small" />
-              )}
-            </View>
-            {contact.phone && (
-              <Text variant="bodyMedium" style={styles.phone}>
-                {contact.phone}
-              </Text>
-            )}
-            {contact.email && (
-              <Text variant="bodySmall" style={styles.email} numberOfLines={1}>
-                {contact.email}
-              </Text>
-            )}
-            {lastContactDate && (
-              <Text variant="bodySmall" style={styles.lastContact}>
+      <View style={styles.card}>
+        {/* Avatar — Design System: Small Avatar */}
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initials}</Text>
+        </View>
+
+        {/* Info */}
+        <View style={styles.info}>
+          <Text style={styles.name} numberOfLines={1}>{contact.name}</Text>
+          {contact.relationship && (
+            <TierBadge tier={contact.relationship.tier} size="small" />
+          )}
+          {lastContactDate && (
+            <View style={styles.lastContactRow}>
+              <Text style={[styles.lastContact, isOverdue && styles.lastContactOverdue]}>
                 Last contact: {formatLastContact(lastContactDate)}
               </Text>
-            )}
-          </View>
-        </Card.Content>
-      </Card>
+              {isOverdue && (
+                <Ionicons name="warning" size={14} color={colors.warning} style={{ marginLeft: 4 }} />
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* Phone Icon */}
+        <TouchableOpacity style={styles.phoneIcon} activeOpacity={0.6}>
+          <Ionicons name="call-outline" size={20} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    marginHorizontal: 16,
-    marginVertical: 6,
-  },
-  content: {
     flexDirection: 'row',
-    padding: 12,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.xs,
+    padding: spacing.lg,
+    borderRadius: radii.lg,
+    ...shadows.light,
   },
   avatar: {
-    marginRight: 12,
+    width: 40,
+    height: 40,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  avatarText: {
+    color: colors.textSecondary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   info: {
     flex: 1,
     justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    gap: 8,
+    gap: spacing.xs,
   },
   name: {
-    flex: 1,
+    fontSize: 17,
     fontWeight: '600',
+    letterSpacing: -0.2,
+    color: colors.textPrimary,
   },
-  phone: {
+  lastContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 2,
-    opacity: 0.7,
-  },
-  email: {
-    marginTop: 2,
-    opacity: 0.6,
   },
   lastContact: {
-    marginTop: 4,
-    opacity: 0.5,
-    fontSize: 11,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  lastContactOverdue: {
+    color: colors.warning,
+    fontWeight: '500',
+  },
+  phoneIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
   },
 });

@@ -38,7 +38,7 @@ export default function ConflictWarning({
       <Card.Content>
         <View style={styles.header}>
           <View style={styles.iconContainer}>
-            <Ionicons name="warning" size={24} color="#FF9800" />
+            <Ionicons name="warning" size={24} color="#FF9500" />
           </View>
           <View style={styles.headerText}>
             <Text style={styles.title}>Schedule Conflict</Text>
@@ -80,7 +80,7 @@ export default function ConflictWarning({
             onPress={onProceed}
             style={styles.proceedButton}
             labelStyle={styles.proceedButtonLabel}
-            buttonColor="#FF9800"
+            buttonColor="#FF9500"
           >
             Proceed Anyway
           </Button>
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     marginHorizontal: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
+    borderLeftColor: '#FF9500',
   },
   header: {
     flexDirection: 'row',

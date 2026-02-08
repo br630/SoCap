@@ -162,10 +162,10 @@ export default function RemindersScreen() {
 
   const getTypeColor = (type: string): string => {
     switch (type) {
-      case 'REACH_OUT': return '#2196F3';
+      case 'REACH_OUT': return '#5AC8FA';
       case 'BIRTHDAY': return '#E91E63';
-      case 'EVENT': return '#4CAF50';
-      case 'SAVINGS': return '#FF9800';
+      case 'EVENT': return '#34C759';
+      case 'SAVINGS': return '#FF9500';
       case 'CUSTOM': return '#9C27B0';
       default: return '#757575';
     }
@@ -174,9 +174,9 @@ export default function RemindersScreen() {
   const getStatusColor = (status: string): string => {
     switch (status) {
       case 'PENDING': return '#FFC107';
-      case 'SENT': return '#2196F3';
-      case 'COMPLETED': return '#4CAF50';
-      case 'DISMISSED': return '#9E9E9E';
+      case 'SENT': return '#5AC8FA';
+      case 'COMPLETED': return '#34C759';
+      case 'DISMISSED': return '#8E8E93';
       default: return '#757575';
     }
   };

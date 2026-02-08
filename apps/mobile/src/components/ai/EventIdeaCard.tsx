@@ -121,7 +121,7 @@ export function EventIdeaCard({
           <Text style={styles.title}>🎯 Event Ideas</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#7C4DFF" />
+          <ActivityIndicator size="large" color="#5856D6" />
           <Text style={styles.loadingText}>
             Finding perfect event ideas for you...
           </Text>
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
     paddingVertical: 12,
     borderRadius: 8,
     marginTop: 14,
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
     borderRadius: 8,
   },
   refreshButtonText: {

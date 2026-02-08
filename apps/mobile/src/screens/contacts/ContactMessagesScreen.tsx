@@ -10,12 +10,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Text, Card, Button, IconButton, Divider } from 'react-native-paper';
+import { Text, Card, Divider } from 'react-native-paper';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useContactAI } from '../../hooks/useAISuggestions';
 import { MessageSuggestionCard } from '../../components/ai';
 import { MessageContext } from '../../services/aiService';
+import { colors, shadows, radii, spacing, typography } from '../../theme/paperTheme';
 
 export default function ContactMessagesScreen() {
   const route = useRoute();
@@ -39,9 +40,7 @@ export default function ContactMessagesScreen() {
   const contexts: { value: MessageContext; label: string; icon: string }[] = [
     { value: 'check-in', label: 'Check In', icon: 'hand-wave' },
     { value: 'birthday', label: 'Birthday', icon: 'cake-variant' },
-    { value: 'congratulations', label: 'Congrats', icon: 'party-popper' },
     { value: 'thank-you', label: 'Thank You', icon: 'hand-heart' },
-    { value: 'reconnect', label: 'Reconnect', icon: 'account-clock' },
     { value: 'sympathy', label: 'Sympathy', icon: 'flower' },
     { value: 'holiday', label: 'Holiday', icon: 'pine-tree' },
     { value: 'event-invite', label: 'Event Invite', icon: 'calendar-plus' },
@@ -74,7 +73,6 @@ export default function ContactMessagesScreen() {
       return;
     }
     if (contactPhone) {
-      // Remove non-numeric characters for WhatsApp
       const cleanPhone = contactPhone.replace(/\D/g, '');
       Linking.openURL(`whatsapp://send?phone=${cleanPhone}&text=${encodeURIComponent(messageText)}`);
     } else {
@@ -89,7 +87,6 @@ export default function ContactMessagesScreen() {
   };
 
   React.useEffect(() => {
-    // Fetch initial suggestions
     fetchMessageSuggestions(selectedContext);
   }, []);
 
@@ -100,7 +97,7 @@ export default function ContactMessagesScreen() {
     >
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Context Selector */}
-        <Text style={styles.sectionTitle}>What's the occasion?</Text>
+        <Text style={styles.sectionLabel}>Context</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -118,7 +115,7 @@ export default function ContactMessagesScreen() {
               <MaterialCommunityIcons
                 name={ctx.icon as any}
                 size={24}
-                color={selectedContext === ctx.value ? '#7C4DFF' : '#666'}
+                color={selectedContext === ctx.value ? '#FFFFFF' : colors.textSecondary}
               />
               <Text
                 style={[
@@ -134,7 +131,7 @@ export default function ContactMessagesScreen() {
 
         {/* AI Suggestions */}
         <View style={styles.suggestionsSection}>
-          <Text style={styles.sectionTitle}>✨ AI Suggestions for {contactName}</Text>
+          <Text style={styles.sectionLabel}>AI Suggestions</Text>
           <MessageSuggestionCard
             suggestions={messageSuggestions?.suggestions || null}
             contactName={contactName}
@@ -145,40 +142,32 @@ export default function ContactMessagesScreen() {
           />
         </View>
 
-        <Divider style={styles.divider} />
+        {/* Compose Message — Standard Card */}
+        <View style={styles.composeCard}>
+          <RNTextInput
+            style={styles.messageInput}
+            placeholder="Type your message..."
+            placeholderTextColor={colors.textSecondary}
+            value={messageText}
+            onChangeText={setMessageText}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+        </View>
 
-        {/* Compose Message */}
-        <Text style={styles.sectionTitle}>Compose Your Message</Text>
-        <Card style={styles.composeCard}>
-          <Card.Content>
-            <RNTextInput
-              style={styles.messageInput}
-              placeholder={`Write a message to ${contactName}...`}
-              placeholderTextColor="#999"
-              value={messageText}
-              onChangeText={setMessageText}
-              multiline
-              numberOfLines={5}
-              textAlignVertical="top"
-            />
-          </Card.Content>
-        </Card>
-
-        {/* Send Options */}
-        <Text style={styles.sectionTitle}>Send Via</Text>
+        {/* Send Options — FAB-sized icons */}
         <View style={styles.sendOptions}>
           <TouchableOpacity style={styles.sendOption} onPress={handleSendViaSMS}>
-            <View style={[styles.sendIconContainer, { backgroundColor: '#4CAF50' }]}>
-              <Ionicons name="chatbubble" size={24} color="#fff" />
+            <View style={[styles.sendIconContainer, { backgroundColor: colors.primary }]}>
+              <Text style={styles.sendIconText}>SMS</Text>
             </View>
-            <Text style={styles.sendOptionLabel}>SMS</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.sendOption} onPress={handleSendViaWhatsApp}>
             <View style={[styles.sendIconContainer, { backgroundColor: '#25D366' }]}>
               <Ionicons name="logo-whatsapp" size={24} color="#fff" />
             </View>
-            <Text style={styles.sendOptionLabel}>WhatsApp</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -192,24 +181,23 @@ export default function ContactMessagesScreen() {
             <View style={[styles.sendIconContainer, { backgroundColor: '#0088cc' }]}>
               <Ionicons name="paper-plane" size={24} color="#fff" />
             </View>
-            <Text style={styles.sendOptionLabel}>Telegram</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.sendOption}
             onPress={() => {
-              // Copy to clipboard for other apps
-              Alert.alert(
-                'Copy Message',
-                'Message copied! You can now paste it in any messaging app.',
-                [{ text: 'OK' }]
-              );
+              Alert.alert('Copy Message', 'Message copied! You can now paste it in any messaging app.', [{ text: 'OK' }]);
             }}
           >
-            <View style={[styles.sendIconContainer, { backgroundColor: '#666' }]}>
-              <Ionicons name="copy" size={24} color="#fff" />
+            <View style={[styles.sendIconContainer, { backgroundColor: colors.textSecondary }]}>
+              <Text style={styles.sendIconText}>Copy</Text>
             </View>
-            <Text style={styles.sendOptionLabel}>Copy</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.sendOption}>
+            <View style={[styles.sendIconContainer, { backgroundColor: colors.textSecondary }]}>
+              <Ionicons name="document-text-outline" size={24} color="#fff" />
+            </View>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -220,72 +208,69 @@ export default function ContactMessagesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   scrollView: {
     flex: 1,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 12,
+  sectionLabel: {
+    ...typography.h5,
+    color: colors.textPrimary,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
   },
   contextsContainer: {
-    paddingHorizontal: 16,
-    gap: 10,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
   },
   contextCard: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginRight: 10,
-    minWidth: 80,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.md,
+    minWidth: 76,
+    ...shadows.light,
   },
   contextCardActive: {
-    borderColor: '#7C4DFF',
-    backgroundColor: '#F3E5FF',
+    backgroundColor: colors.primary,
   },
   contextLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 6,
+    ...typography.overline,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
     textAlign: 'center',
   },
   contextLabelActive: {
-    color: '#7C4DFF',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   suggestionsSection: {
-    marginTop: 8,
-  },
-  divider: {
-    marginVertical: 16,
-    marginHorizontal: 16,
+    marginTop: spacing.sm,
   },
   composeCard: {
-    marginHorizontal: 16,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    ...shadows.light,
   },
   messageInput: {
-    fontSize: 16,
-    color: '#1a1a1a',
-    minHeight: 120,
+    ...typography.bodySmall,
+    color: colors.textPrimary,
+    minHeight: 100,
     padding: 0,
   },
   sendOptions: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 32,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
+    paddingBottom: spacing['3xl'],
+    gap: spacing.lg,
   },
   sendOption: {
     alignItems: 'center',
@@ -293,13 +278,14 @@ const styles = StyleSheet.create({
   sendIconContainer: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: radii.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    ...shadows.light,
   },
-  sendOptionLabel: {
+  sendIconText: {
+    color: '#FFFFFF',
     fontSize: 12,
-    color: '#666',
+    fontWeight: '600',
   },
 });

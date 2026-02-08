@@ -24,11 +24,11 @@ const MONTHS = [
 ];
 
 const STATUS_COLORS: Record<EventStatus, string> = {
-  DRAFT: '#9E9E9E',
-  PLANNING: '#FF9800',
-  CONFIRMED: '#4CAF50',
-  COMPLETED: '#607D8B',
-  CANCELLED: '#F44336',
+  DRAFT: '#8E8E93',
+  PLANNING: '#FF9500',
+  CONFIRMED: '#34C759',
+  COMPLETED: '#8E8E93',
+  CANCELLED: '#FF3B30',
 };
 
 const { width } = Dimensions.get('window');

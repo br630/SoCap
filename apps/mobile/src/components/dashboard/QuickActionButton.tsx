@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, shadows, radii, spacing } from '../../theme/paperTheme';
 
 interface QuickActionButtonProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -14,7 +15,7 @@ export default function QuickActionButton({
   icon,
   label,
   onPress,
-  color = '#007AFF',
+  color = colors.primary,
 }: QuickActionButtonProps) {
   return (
     <TouchableOpacity
@@ -22,10 +23,10 @@ export default function QuickActionButton({
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
+      <View style={styles.iconContainer}>
         <Ionicons name={icon} size={24} color={color} />
       </View>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label} numberOfLines={2}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -34,20 +35,23 @@ const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 80,
+    minWidth: 72,
+    flex: 1,
   },
   iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: radii.md,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
+    ...shadows.light,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#1a1a1a',
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
 });

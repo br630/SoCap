@@ -38,7 +38,7 @@ export function ConversationStarterList({
           <Text style={styles.title}>💬 Conversation Starters</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#7C4DFF" />
+          <ActivityIndicator size="small" color="#5856D6" />
           <Text style={styles.loadingText}>
             Finding topics for {contactName}...
           </Text>
@@ -103,7 +103,7 @@ export function ConversationStarterList({
             <View style={styles.copyIndicator}>
               {isCopied ? (
                 <>
-                  <Ionicons name="checkmark" size={16} color="#4CAF50" />
+                  <Ionicons name="checkmark" size={16} color="#34C759" />
                   <Text style={styles.copiedText}>Copied!</Text>
                 </>
               ) : (
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   },
   starterItemCopied: {
     backgroundColor: '#E8F5E9',
-    borderColor: '#4CAF50',
+    borderColor: '#34C759',
   },
   starterContent: {
     flex: 1,
@@ -172,14 +172,14 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#7C4DFF20',
+    backgroundColor: '#5856D620',
     alignItems: 'center',
     justifyContent: 'center',
   },
   numberText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#7C4DFF',
+    color: '#5856D6',
   },
   starterText: {
     flex: 1,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   },
   copiedText: {
     fontSize: 12,
-    color: '#4CAF50',
+    color: '#34C759',
     fontWeight: '500',
   },
   loadingContainer: {
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
     borderRadius: 8,
   },
   refreshButtonText: {

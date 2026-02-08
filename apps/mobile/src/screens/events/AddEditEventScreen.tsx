@@ -22,7 +22,7 @@ import contactService, { Contact } from '../../services/contactService';
 import { EventIdeaCard } from '../../components/ai';
 import { useFetchEventIdeas } from '../../hooks/useAISuggestions';
 import { BudgetTier, EventIdea } from '../../services/aiService';
-import { DatePickerModal } from '../../components/common';
+import { DateRangePicker } from '../../components/common';
 
 const EVENT_TYPES = [
   { value: 'SOCIAL', label: '🎉 Social', description: 'Parties, hangouts' },
@@ -78,16 +78,13 @@ export default function AddEditEventScreen() {
   const [sendInvitations, setSendInvitations] = useState(true);
   
   // UI state
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // AI hook
   const { mutate: fetchEventIdeas, data: eventIdeasData, isPending: isLoadingIdeas } = useFetchEventIdeas();
 
-  // Calculate duration
+  // Calculate duration for display / invitations
   const duration = useMemo(() => {
     const diffMs = endTime.getTime() - startTime.getTime();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -364,7 +361,7 @@ export default function AddEditEventScreen() {
               <Text style={styles.aiButtonSubtitle}>Get AI-powered event suggestions</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#7C4DFF" />
+          <Ionicons name="chevron-forward" size={20} color="#5856D6" />
         </TouchableOpacity>
 
         {/* Event Title */}
@@ -397,71 +394,19 @@ export default function AddEditEventScreen() {
           </ScrollView>
         </View>
 
-        {/* Date */}
+        {/* Date & Time Range */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Date</Text>
-          <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-            <Ionicons name="calendar-outline" size={20} color="#666" />
-            <Text style={styles.dateButtonText}>{formatDate(date)}</Text>
-          </TouchableOpacity>
-          <DatePickerModal
-            visible={showDatePicker}
-            value={date}
-            mode="date"
-            title="Select Date"
+          <Text style={styles.label}>Date & Time</Text>
+          <DateRangePicker
+            startDate={startTime}
+            endDate={endTime}
             minimumDate={new Date()}
-            onConfirm={(selectedDate) => {
-              setDate(selectedDate);
-              setShowDatePicker(false);
+            onApply={(start, end) => {
+              setDate(start);
+              setStartTime(start);
+              setEndTime(end);
             }}
-            onCancel={() => setShowDatePicker(false)}
           />
-        </View>
-
-        {/* Time */}
-        <View style={styles.timeRow}>
-          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>Start Time</Text>
-            <TouchableOpacity style={styles.dateButton} onPress={() => setShowStartPicker(true)}>
-              <Ionicons name="time-outline" size={20} color="#666" />
-              <Text style={styles.dateButtonText}>{formatTime(startTime)}</Text>
-            </TouchableOpacity>
-            <DatePickerModal
-              visible={showStartPicker}
-              value={startTime}
-              mode="time"
-              title="Select Start Time"
-              onConfirm={(selectedTime) => {
-                setStartTime(selectedTime);
-                setShowStartPicker(false);
-              }}
-              onCancel={() => setShowStartPicker(false)}
-            />
-          </View>
-          <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>End Time</Text>
-            <TouchableOpacity style={styles.dateButton} onPress={() => setShowEndPicker(true)}>
-              <Ionicons name="time-outline" size={20} color="#666" />
-              <Text style={styles.dateButtonText}>{formatTime(endTime)}</Text>
-            </TouchableOpacity>
-            <DatePickerModal
-              visible={showEndPicker}
-              value={endTime}
-              mode="time"
-              title="Select End Time"
-              onConfirm={(selectedTime) => {
-                setEndTime(selectedTime);
-                setShowEndPicker(false);
-              }}
-              onCancel={() => setShowEndPicker(false)}
-            />
-          </View>
-        </View>
-
-        {/* Duration Display */}
-        <View style={styles.durationContainer}>
-          <Ionicons name="hourglass-outline" size={18} color="#7C4DFF" />
-          <Text style={styles.durationText}>Duration: {duration}</Text>
         </View>
 
         {/* Attendees Section */}
@@ -472,7 +417,7 @@ export default function AddEditEventScreen() {
               style={styles.addAttendeeButton}
               onPress={() => setShowAttendeeModal(true)}
             >
-              <Ionicons name="person-add" size={18} color="#7C4DFF" />
+              <Ionicons name="person-add" size={18} color="#5856D6" />
               <Text style={styles.addAttendeeText}>Add</Text>
             </TouchableOpacity>
           </View>
@@ -499,7 +444,7 @@ export default function AddEditEventScreen() {
                     onPress={() => sendInvitation(attendee)}
                     style={styles.sendInviteButton}
                   >
-                    <Ionicons name="paper-plane-outline" size={16} color="#7C4DFF" />
+                    <Ionicons name="paper-plane-outline" size={16} color="#5856D6" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => removeAttendee(attendee.id)}>
                     <Ionicons name="close-circle" size={20} color="#999" />
@@ -512,7 +457,7 @@ export default function AddEditEventScreen() {
                 <Checkbox
                   status={sendInvitations ? 'checked' : 'unchecked'}
                   onPress={() => setSendInvitations(!sendInvitations)}
-                  color="#7C4DFF"
+                  color="#5856D6"
                 />
                 <Text style={styles.sendAllText}>Send invitations when event is created</Text>
               </View>
@@ -620,7 +565,7 @@ export default function AddEditEventScreen() {
 
           {loadingContacts ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#7C4DFF" />
+              <ActivityIndicator size="large" color="#5856D6" />
               <Text style={styles.loadingText}>Loading contacts...</Text>
             </View>
           ) : (
@@ -637,7 +582,7 @@ export default function AddEditEventScreen() {
                   >
                     <Checkbox
                       status={isSelected ? 'checked' : 'unchecked'}
-                      color="#7C4DFF"
+                      color="#5856D6"
                     />
                     {item.profileImage ? (
                       <Image source={{ uri: item.profileImage }} style={styles.contactAvatar} />
@@ -658,7 +603,7 @@ export default function AddEditEventScreen() {
                       )}
                     </View>
                     {isSelected && (
-                      <Ionicons name="checkmark-circle" size={24} color="#7C4DFF" />
+                      <Ionicons name="checkmark-circle" size={24} color="#5856D6" />
                     )}
                   </TouchableOpacity>
                 );
@@ -752,8 +697,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#7C4DFF30',
-    shadowColor: '#7C4DFF',
+    borderColor: '#5856D630',
+    shadowColor: '#5856D6',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -773,7 +718,7 @@ const styles = StyleSheet.create({
   aiButtonTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#7C4DFF',
+    color: '#5856D6',
   },
   aiButtonSubtitle: {
     fontSize: 12,
@@ -814,8 +759,8 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
   },
   typeChipActive: {
-    backgroundColor: '#7C4DFF',
-    borderColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
+    borderColor: '#5856D6',
   },
   typeChipText: {
     fontSize: 14,
@@ -856,8 +801,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   budgetChipActive: {
-    backgroundColor: '#7C4DFF',
-    borderColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
+    borderColor: '#5856D6',
   },
   budgetChipLabel: {
     fontSize: 13,
@@ -887,7 +832,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#eee',
   },
   saveButton: {
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -920,7 +865,7 @@ const styles = StyleSheet.create({
   },
   modalClose: {
     fontSize: 16,
-    color: '#7C4DFF',
+    color: '#5856D6',
     fontWeight: '600',
   },
   modalBudgetSection: {
@@ -942,7 +887,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   modalBudgetChipActive: {
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
   },
   modalBudgetChipText: {
     fontSize: 13,
@@ -955,23 +900,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  durationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3E5FF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginBottom: 20,
-    marginTop: -10,
-    gap: 6,
-  },
-  durationText: {
-    fontSize: 14,
-    color: '#7C4DFF',
-    fontWeight: '500',
-  },
+  // Duration styles moved to TimePicker component
   attendeesHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -989,7 +918,7 @@ const styles = StyleSheet.create({
   },
   addAttendeeText: {
     fontSize: 13,
-    color: '#7C4DFF',
+    color: '#5856D6',
     fontWeight: '500',
   },
   emptyAttendees: {
@@ -1024,7 +953,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   attendeeAvatar: {
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
   },
   attendeeName: {
     flex: 1,
@@ -1077,7 +1006,7 @@ const styles = StyleSheet.create({
   contactItemSelected: {
     backgroundColor: '#F3E5FF',
     borderWidth: 1,
-    borderColor: '#7C4DFF',
+    borderColor: '#5856D6',
   },
   contactAvatar: {
     width: 40,
@@ -1085,7 +1014,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   contactAvatarText: {
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
   },
   contactInfo: {
     flex: 1,

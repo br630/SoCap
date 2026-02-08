@@ -36,7 +36,8 @@ export type OAuthLoginInput = z.infer<typeof oauthLoginSchema>;
 export const updateProfileSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(100, 'First name is too long').optional(),
   lastName: z.string().min(1, 'Last name is required').max(100, 'Last name is too long').optional(),
-  profileImage: z.string().url('Invalid image URL').optional().or(z.literal('')),
+  profileImage: z.string().optional().or(z.literal('')),
+  bio: z.string().max(500, 'Bio is too long').optional().or(z.literal('')),
   timezone: z.string().optional(),
 });
 

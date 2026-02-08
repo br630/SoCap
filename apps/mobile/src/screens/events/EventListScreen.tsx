@@ -21,7 +21,7 @@ const STATUS_FILTERS: { value: FilterStatus; label: string }[] = [
 export default function EventListScreen() {
   const navigation = useNavigation();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>('UPCOMING');
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL');
   const [page, setPage] = useState(1);
 
   // Calculate date filters based on status filter

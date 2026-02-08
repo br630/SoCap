@@ -9,6 +9,8 @@ import {
   TextInput,
 } from 'react-native';
 import { Text, Button } from 'react-native-paper';
+import { TimePicker } from './TimePicker';
+import { colors } from '../../theme/paperTheme';
 
 // Only import DateTimePicker for native platforms
 let DateTimePicker: any = null;
@@ -80,7 +82,7 @@ export function DatePickerModal({
     return `${year}-${month}-${day}`;
   };
 
-  // Web: Use HTML date input
+  // Web: Use HTML date input or custom TimePicker
   if (Platform.OS === 'web') {
     if (!visible) return null;
     
@@ -97,33 +99,42 @@ export function DatePickerModal({
               <View style={styles.webModalContent}>
                 {title && <Text style={styles.webTitle}>{title}</Text>}
                 
-                <input
-                  type={mode === 'time' ? 'time' : 'date'}
-                  value={formatDateForInput(tempDate)}
-                  min={minimumDate ? formatDateForInput(minimumDate) : undefined}
-                  max={maximumDate ? formatDateForInput(maximumDate) : undefined}
-                  onChange={(e) => {
-                    const newDate = new Date(e.target.value);
-                    if (!isNaN(newDate.getTime())) {
-                      setTempDate(newDate);
-                    }
-                  }}
-                  style={{
-                    fontSize: 18,
-                    padding: 12,
-                    borderRadius: 8,
-                    border: '1px solid #ddd',
-                    marginVertical: 16,
-                    width: '100%',
-                  }}
-                />
+                {mode === 'time' ? (
+                  <View style={{ marginVertical: 8 }}>
+                    <TimePicker
+                      date={tempDate}
+                      onTimeChange={(newDate) => setTempDate(newDate)}
+                    />
+                  </View>
+                ) : (
+                  <input
+                    type="date"
+                    value={formatDateForInput(tempDate)}
+                    min={minimumDate ? formatDateForInput(minimumDate) : undefined}
+                    max={maximumDate ? formatDateForInput(maximumDate) : undefined}
+                    onChange={(e) => {
+                      const newDate = new Date(e.target.value);
+                      if (!isNaN(newDate.getTime())) {
+                        setTempDate(newDate);
+                      }
+                    }}
+                    style={{
+                      fontSize: 18,
+                      padding: 12,
+                      borderRadius: 8,
+                      border: '1px solid #ddd',
+                      marginVertical: 16,
+                      width: '100%',
+                    }}
+                  />
+                )}
 
                 <View style={styles.webButtonRow}>
                   <TouchableOpacity onPress={onCancel} style={styles.webButton}>
                     <Text style={styles.cancelText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={handleConfirm} style={[styles.webButton, styles.webConfirmButton]}>
-                    <Text style={styles.doneText}>Confirm</Text>
+                    <Text style={[styles.doneText, { color: '#FFFFFF' }]}>Confirm</Text>
                   </TouchableOpacity>
                 </View>
               </View>

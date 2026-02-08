@@ -48,7 +48,7 @@ export function InterestUpdatesCard({ contactId, contactName }: InterestUpdatesC
     return (
       <Card style={styles.card}>
         <Card.Content style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#7C4DFF" />
+          <ActivityIndicator size="small" color="#5856D6" />
           <Text style={styles.loadingText}>Finding conversation topics...</Text>
         </Card.Content>
       </Card>
@@ -63,7 +63,7 @@ export function InterestUpdatesCard({ contactId, contactName }: InterestUpdatesC
     <Card style={styles.card}>
       <Card.Content>
         <View style={styles.header}>
-          <Ionicons name="newspaper-outline" size={20} color="#7C4DFF" />
+          <Ionicons name="newspaper-outline" size={20} color="#5856D6" />
           <Text style={styles.headerTitle}>Topics to Talk About</Text>
         </View>
         <Text style={styles.subtitle}>
@@ -166,7 +166,7 @@ export function TrendingInterestsCard({ onPressInterest }: TrendingInterestsCard
     return (
       <Card style={styles.trendingCard}>
         <Card.Content style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#7C4DFF" />
+          <ActivityIndicator size="small" color="#5856D6" />
           <Text style={styles.loadingText}>Loading trending topics...</Text>
         </Card.Content>
       </Card>
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E5FF',
   },
   interestChipText: {
-    color: '#7C4DFF',
+    color: '#5856D6',
     fontWeight: '500',
   },
   startersContainer: {

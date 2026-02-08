@@ -19,9 +19,9 @@ interface MessageOption {
 }
 
 const MESSAGE_OPTIONS: MessageOption[] = [
-  { key: 'casual', label: 'Casual', icon: 'happy-outline', color: '#4CAF50' },
+  { key: 'casual', label: 'Casual', icon: 'happy-outline', color: '#34C759' },
   { key: 'warm', label: 'Warm', icon: 'heart-outline', color: '#FF6B6B' },
-  { key: 'thoughtful', label: 'Thoughtful', icon: 'sparkles-outline', color: '#7C4DFF' },
+  { key: 'thoughtful', label: 'Thoughtful', icon: 'sparkles-outline', color: '#5856D6' },
 ];
 
 interface MessageSuggestionCardProps {
@@ -83,7 +83,7 @@ export function MessageSuggestionCard({
           <Text style={styles.title}>✨ AI Message Ideas</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#7C4DFF" />
+          <ActivityIndicator size="large" color="#5856D6" />
           <Text style={styles.loadingText}>
             Crafting personalized messages for {contactName}...
           </Text>
@@ -151,7 +151,7 @@ export function MessageSuggestionCard({
                 <Ionicons
                   name={isCopied ? 'checkmark' : 'copy-outline'}
                   size={16}
-                  color={isCopied ? '#4CAF50' : '#666'}
+                  color={isCopied ? '#34C759' : '#666'}
                 />
                 <Text style={[styles.actionText, isCopied && styles.actionTextActive]}>
                   {isCopied ? 'Copied!' : 'Copy'}
@@ -185,7 +185,7 @@ export function MessageSuggestionCard({
             <Ionicons
               name="thumbs-up-outline"
               size={18}
-              color={feedbackGiven === 'helpful' ? '#4CAF50' : '#666'}
+              color={feedbackGiven === 'helpful' ? '#34C759' : '#666'}
             />
           </TouchableOpacity>
           <TouchableOpacity
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   actionTextActive: {
-    color: '#4CAF50',
+    color: '#34C759',
   },
   feedbackSection: {
     marginTop: 8,
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   feedbackThanks: {
     marginTop: 8,
     fontSize: 12,
-    color: '#4CAF50',
+    color: '#34C759',
   },
   loadingContainer: {
     alignItems: 'center',
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
     borderRadius: 8,
   },
   refreshButtonText: {

@@ -1,7 +1,8 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/home/HomeScreen';
 import ContactListScreen from '../screens/contacts/ContactListScreen';
 import ContactDetailScreen from '../screens/contacts/ContactDetailScreen';
@@ -18,6 +19,7 @@ import CalendarSettingsScreen from '../screens/settings/CalendarSettingsScreen';
 import SecuritySettingsScreen from '../screens/settings/SecuritySettingsScreen';
 import WritingStyleScreen from '../screens/settings/WritingStyleScreen';
 import InsightsScreen from '../screens/insights/InsightsScreen';
+import { colors, spacing, typography } from '../theme/paperTheme';
 
 import { MainTabParamList, ContactStackParamList, SettingsStackParamList } from '../types/navigation';
 
@@ -33,14 +35,15 @@ const ContactStack = createStackNavigator<ContactStackParamList>();
 const SettingsStack = createStackNavigator<SettingsStackParamList>();
 const EventStack = createStackNavigator<EventStackParamList>();
 
-// Icon component wrapper to ensure proper type
-const TabIcon = ({ icon, color }: { icon: string; color: string }) => (
-  <Text style={{ color, fontSize: 24 }}>{icon}</Text>
-);
-
 function ContactNavigator() {
   return (
-    <ContactStack.Navigator>
+    <ContactStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.background, elevation: 0, shadowOpacity: 0 },
+        headerTintColor: colors.textPrimary,
+        headerTitleStyle: { fontWeight: '600', fontSize: 17, letterSpacing: -0.2 },
+      }}
+    >
       <ContactStack.Screen
         name="ContactList"
         component={ContactListScreen}
@@ -49,7 +52,7 @@ function ContactNavigator() {
       <ContactStack.Screen
         name="ContactDetail"
         component={ContactDetailScreen}
-        options={{ title: 'Contact Details' }}
+        options={{ title: 'Contact Detail' }}
       />
       <ContactStack.Screen
         name="AddEditContact"
@@ -64,15 +67,15 @@ function ContactNavigator() {
       <ContactStack.Screen
         name="ContactMessages"
         component={ContactMessagesScreen}
-        options={({ route }: any) => ({ 
-          title: `Message ${route.params?.contactName || 'Contact'}` 
+        options={({ route }: any) => ({
+          title: `Message ${route.params?.contactName || 'Contact'}`,
         })}
       />
       <ContactStack.Screen
         name="ContactEvents"
         component={ContactEventsScreen}
-        options={({ route }: any) => ({ 
-          title: `Events with ${route.params?.contactName || 'Contact'}` 
+        options={({ route }: any) => ({
+          title: `Events with ${route.params?.contactName || 'Contact'}`,
         })}
       />
     </ContactStack.Navigator>
@@ -81,7 +84,13 @@ function ContactNavigator() {
 
 function EventNavigator() {
   return (
-    <EventStack.Navigator>
+    <EventStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.background, elevation: 0, shadowOpacity: 0 },
+        headerTintColor: colors.textPrimary,
+        headerTitleStyle: { fontWeight: '600', fontSize: 17, letterSpacing: -0.2 },
+      }}
+    >
       <EventStack.Screen
         name="EventList"
         component={EventsScreen}
@@ -90,7 +99,7 @@ function EventNavigator() {
       <EventStack.Screen
         name="EventDetail"
         component={EventDetailScreen}
-        options={{ title: 'Event Details' }}
+        options={{ title: 'Event Detail' }}
       />
       <EventStack.Screen
         name="AddEditEvent"
@@ -100,67 +109,25 @@ function EventNavigator() {
       <EventStack.Screen
         name="CreateEvent"
         component={AddEditEventScreen}
-        options={({ route }: any) => ({ 
-          title: route.params?.contactName 
-            ? `Event with ${route.params.contactName}` 
-            : 'Create Event' 
+        options={({ route }: any) => ({
+          title: route.params?.contactName
+            ? `Event with ${route.params.contactName}`
+            : 'Create Event',
         })}
       />
     </EventStack.Navigator>
   );
 }
 
-export default function MainNavigator() {
-  return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: true,
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#666',
-      }}
-    >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ color }: { color: string }) => <TabIcon icon="🏠" color={color} />,
-        }}
-      />
-      <Tab.Screen
-        name="Contacts"
-        component={ContactNavigator}
-        options={{
-          tabBarLabel: 'Contacts',
-          tabBarIcon: ({ color }: { color: string }) => <TabIcon icon="👥" color={color} />,
-          headerShown: false,
-        }}
-      />
-      <Tab.Screen
-        name="Events"
-        component={EventNavigator}
-        options={{
-          tabBarLabel: 'Events',
-          tabBarIcon: ({ color }: { color: string }) => <TabIcon icon="📅" color={color} />,
-          headerShown: false,
-        }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileNavigator}
-        options={{
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({ color }: { color: string }) => <TabIcon icon="👤" color={color} />,
-          headerShown: false,
-        }}
-      />
-    </Tab.Navigator>
-  );
-}
-
 function ProfileNavigator() {
   return (
-    <SettingsStack.Navigator>
+    <SettingsStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.background, elevation: 0, shadowOpacity: 0 },
+        headerTintColor: colors.textPrimary,
+        headerTitleStyle: { fontWeight: '600', fontSize: 17, letterSpacing: -0.2 },
+      }}
+    >
       <SettingsStack.Screen
         name="Profile"
         component={ProfileScreen}
@@ -192,5 +159,86 @@ function ProfileNavigator() {
         options={{ title: 'My Writing Style' }}
       />
     </SettingsStack.Navigator>
+  );
+}
+
+export default function MainNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarStyle: {
+          backgroundColor: colors.background,
+          borderTopWidth: 0,
+          ...{
+            shadowColor: '#000000',
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.08,
+            shadowRadius: 12,
+            elevation: 8,
+          },
+          height: 84,
+          paddingBottom: 28,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          letterSpacing: 0.5,
+        },
+      }}
+    >
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Contacts"
+        component={ContactNavigator}
+        options={{
+          tabBarLabel: 'Contacts',
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+            <Ionicons name={focused ? 'people' : 'people-outline'} size={24} color={color} />
+          ),
+          headerShown: false,
+        }}
+        listeners={({ navigation: nav }) => ({
+          tabPress: (e) => {
+            // Always reset to ContactList when tab is pressed
+            nav.navigate('Contacts', { screen: 'ContactList' });
+          },
+        })}
+      />
+      <Tab.Screen
+        name="Events"
+        component={EventNavigator}
+        options={{
+          tabBarLabel: 'Events',
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={24} color={color} />
+          ),
+          headerShown: false,
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileNavigator}
+        options={{
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
+          ),
+          headerShown: false,
+        }}
+      />
+    </Tab.Navigator>
   );
 }

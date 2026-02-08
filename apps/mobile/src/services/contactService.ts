@@ -8,6 +8,7 @@ export interface Contact {
   phone?: string | null;
   email?: string | null;
   profileImage?: string | null;
+  bio?: string | null;
   birthday?: string | null;
   anniversary?: string | null;
   notes?: string | null;
@@ -68,6 +69,7 @@ export interface CreateContactData {
   phone?: string;
   email?: string;
   profileImage?: string;
+  bio?: string;
   birthday?: string;
   anniversary?: string;
   notes?: string;
@@ -80,6 +82,7 @@ export interface UpdateContactData {
   phone?: string;
   email?: string;
   profileImage?: string;
+  bio?: string;
   birthday?: string;
   anniversary?: string;
   notes?: string;

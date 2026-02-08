@@ -64,7 +64,7 @@ export function AutoSyncSettings() {
         <Card.Content>
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <Ionicons name="call-outline" size={24} color={isQuickLogEnabled ? '#4CAF50' : '#666'} />
+              <Ionicons name="call-outline" size={24} color={isQuickLogEnabled ? '#34C759' : '#666'} />
               <Text style={styles.title}>Quick Log Calls</Text>
             </View>
             <Switch
@@ -81,15 +81,15 @@ export function AutoSyncSettings() {
           {isQuickLogEnabled && (
             <View style={styles.iosInfoSection}>
               <View style={styles.iosInfoItem}>
-                <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
+                <Ionicons name="checkmark-circle" size={18} color="#34C759" />
                 <Text style={styles.iosInfoText}>You'll be prompted after calls end</Text>
               </View>
               <View style={styles.iosInfoItem}>
-                <Ionicons name="shield-checkmark" size={18} color="#4CAF50" />
+                <Ionicons name="shield-checkmark" size={18} color="#34C759" />
                 <Text style={styles.iosInfoText}>Your call history stays private</Text>
               </View>
               <View style={styles.iosInfoItem}>
-                <Ionicons name="time-outline" size={18} color="#4CAF50" />
+                <Ionicons name="time-outline" size={18} color="#34C759" />
                 <Text style={styles.iosInfoText}>Log calls with one tap</Text>
               </View>
             </View>
@@ -104,7 +104,7 @@ export function AutoSyncSettings() {
       <Card.Content>
         <View style={styles.header}>
           <View style={styles.titleRow}>
-            <Ionicons name="sync" size={24} color={isEnabled ? '#4CAF50' : '#666'} />
+            <Ionicons name="sync" size={24} color={isEnabled ? '#34C759' : '#666'} />
             <Text style={styles.title}>Auto-Sync Calls</Text>
           </View>
           <Switch
@@ -150,7 +150,7 @@ export function AutoSyncSettings() {
 
         {!hasPermission && isEnabled && (
           <View style={styles.permissionWarning}>
-            <Ionicons name="warning" size={20} color="#FF9800" />
+            <Ionicons name="warning" size={20} color="#FF9500" />
             <Text style={styles.warningText}>
               Permission required. Tap the toggle to grant access.
             </Text>
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   warningText: {
     flex: 1,
     fontSize: 13,
-    color: '#FF9800',
+    color: '#FF9500',
   },
   iosInfoSection: {
     marginTop: 16,

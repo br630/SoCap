@@ -12,59 +12,146 @@ import {
   TextInput,
   Button,
   Card,
-  IconButton,
   ActivityIndicator,
   SegmentedButtons,
+  ProgressBar,
 } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { colors, spacing, radii, shadows, typography } from '../../theme/paperTheme';
 
-const WRITING_STYLES_KEY = '@writing_styles';
+const WRITING_STYLES_KEY = '@writing_styles_v2';
 
-interface WritingStyle {
-  id: string;
-  type: 'close' | 'casual' | 'professional';
-  sample: string;
-  createdAt: string;
+type StyleType = 'close' | 'casual' | 'professional';
+
+interface PromptResponse {
+  promptId: string;
+  styleType: StyleType;
+  prompt: string;
+  response: string;
+  savedAt: string;
 }
 
-const STYLE_TYPES = [
-  { 
-    value: 'close', 
-    label: 'Close Friends/Family',
-    description: 'How you text your best friends, siblings, or partner',
-    placeholder: "e.g., 'yo what's good! you free this weekend? we should definitely hang, been too long 😂'",
+interface PromptDefinition {
+  id: string;
+  scenario: string;
+  context: string;
+}
+
+const PROMPTS: Record<StyleType, PromptDefinition[]> = {
+  close: [
+    {
+      id: 'close_1',
+      scenario: 'Celebrating good news',
+      context:
+        'Your best friend just texted you that they got the job they\'ve been interviewing for all month. Write your response — react how you naturally would, including any emojis, slang, or voice notes you\'d normally use.',
+    },
+    {
+      id: 'close_2',
+      scenario: 'Checking in & making plans',
+      context:
+        'You haven\'t talked to your closest friend or sibling in about two weeks. You miss them and want to catch up and make plans to hang out this weekend. Write the message you\'d send to get the conversation going.',
+    },
+    {
+      id: 'close_3',
+      scenario: 'Comforting someone you love',
+      context:
+        'Someone very close to you (partner, best friend, or family member) just told you they\'re having a really rough week — work stress, personal issues, all of it. Write how you\'d respond to comfort and support them.',
+    },
+  ],
+  casual: [
+    {
+      id: 'casual_1',
+      scenario: 'Reconnecting with someone',
+      context:
+        'You bumped into a friend from college at a coffee shop last week and said "we should catch up!" Now you\'re following up. Write the message you\'d send to actually set something up — a coffee, lunch, or hangout.',
+    },
+    {
+      id: 'casual_2',
+      scenario: 'Responding to a group chat',
+      context:
+        'A friend in your group chat just shared photos from an amazing vacation they went on. Everyone\'s been reacting. Write how you\'d naturally respond — your reaction, any follow-up questions, etc.',
+    },
+    {
+      id: 'casual_3',
+      scenario: 'Cancelling plans gracefully',
+      context:
+        'You made plans with a friend for Saturday but something came up and you need to cancel. You still want to hang out another time. Write the message you\'d send — how would you break it to them and suggest rescheduling?',
+    },
+  ],
+  professional: [
+    {
+      id: 'professional_1',
+      scenario: 'Thanking a colleague',
+      context:
+        'A colleague stayed late to help you prepare for a big presentation that went really well. Write the thank-you message you\'d send them the next day — show your genuine appreciation while keeping it professional.',
+    },
+    {
+      id: 'professional_2',
+      scenario: 'Networking follow-up',
+      context:
+        'You met someone interesting at a professional event last week. They work in a field you\'re curious about and you exchanged numbers. Write your initial follow-up message to explore a potential collaboration or mentorship.',
+    },
+    {
+      id: 'professional_3',
+      scenario: 'Following up on a missed deadline',
+      context:
+        'A team member was supposed to send you their portion of a shared project by yesterday but didn\'t. You need it soon but don\'t want to be harsh. Write how you\'d follow up to get an update on the status.',
+    },
+  ],
+};
+
+const STYLE_META: Record<StyleType, { label: string; icon: string; color: string; description: string }> = {
+  close: {
+    label: 'Close Friends & Family',
+    icon: 'heart',
+    color: '#E91E63',
+    description: 'How you text the people you\'re closest to — no filter, full personality.',
   },
-  { 
-    value: 'casual', 
+  casual: {
     label: 'Casual Friends',
-    description: 'How you message regular friends or acquaintances',
-    placeholder: "e.g., 'Hey! Hope you're doing well. Wanted to see if you'd be interested in grabbing coffee sometime?'",
+    icon: 'people',
+    color: colors.primary,
+    description: 'How you message regular friends and acquaintances — friendly but not over-the-top.',
   },
-  { 
-    value: 'professional', 
-    label: 'Professional',
-    description: 'How you communicate with colleagues or business contacts',
-    placeholder: "e.g., 'Hi John, I hope this message finds you well. I wanted to follow up on our conversation last week...'",
+  professional: {
+    label: 'Professional Contacts',
+    icon: 'briefcase',
+    color: colors.secondary,
+    description: 'How you communicate with colleagues, clients, or business contacts.',
   },
-];
+};
 
 export default function WritingStyleScreen() {
-  const [styles, setStyles] = useState<WritingStyle[]>([]);
+  const [responses, setResponses] = useState<PromptResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedType, setSelectedType] = useState<'close' | 'casual' | 'professional'>('close');
-  const [currentSample, setCurrentSample] = useState('');
+  const [selectedType, setSelectedType] = useState<StyleType>('close');
+  const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
+  const [draftText, setDraftText] = useState('');
 
   useEffect(() => {
-    loadStyles();
+    loadResponses();
   }, []);
 
-  const loadStyles = async () => {
+  // When switching type or after saving, jump to the first unanswered prompt
+  useEffect(() => {
+    const prompts = PROMPTS[selectedType];
+    const answered = responses.filter((r) => r.styleType === selectedType);
+    const answeredIds = new Set(answered.map((r) => r.promptId));
+    const firstUnanswered = prompts.findIndex((p) => !answeredIds.has(p.id));
+    setCurrentPromptIndex(firstUnanswered >= 0 ? firstUnanswered : 0);
+    // Load existing draft for the current prompt
+    const currentPrompt = prompts[firstUnanswered >= 0 ? firstUnanswered : 0];
+    const existing = responses.find((r) => r.promptId === currentPrompt.id);
+    setDraftText(existing?.response || '');
+  }, [selectedType, responses]);
+
+  const loadResponses = async () => {
     try {
       const stored = await AsyncStorage.getItem(WRITING_STYLES_KEY);
       if (stored) {
-        setStyles(JSON.parse(stored));
+        setResponses(JSON.parse(stored));
       }
     } catch (error) {
       console.error('Failed to load writing styles:', error);
@@ -73,197 +160,270 @@ export default function WritingStyleScreen() {
     }
   };
 
-  const saveStyles = async (newStyles: WritingStyle[]) => {
-    try {
-      await AsyncStorage.setItem(WRITING_STYLES_KEY, JSON.stringify(newStyles));
-      setStyles(newStyles);
-    } catch (error) {
-      console.error('Failed to save writing styles:', error);
-      Alert.alert('Error', 'Failed to save writing style');
-    }
-  };
-
-  const handleAddSample = async () => {
-    if (!currentSample.trim()) {
-      Alert.alert('Empty Sample', 'Please write a sample message first');
+  const saveResponse = async () => {
+    if (!draftText.trim()) {
+      Alert.alert('Empty Response', 'Please write how you\'d respond to this scenario.');
       return;
     }
 
-    if (currentSample.trim().length < 20) {
-      Alert.alert('Too Short', 'Please write a longer sample (at least 20 characters) to help the AI understand your style');
+    if (draftText.trim().length < 20) {
+      Alert.alert(
+        'A Bit More Detail',
+        'Write at least a couple sentences so the AI can really learn your style. The more natural and detailed, the better!'
+      );
       return;
     }
 
     setSaving(true);
     try {
-      const newStyle: WritingStyle = {
-        id: Date.now().toString(),
-        type: selectedType,
-        sample: currentSample.trim(),
-        createdAt: new Date().toISOString(),
+      const prompt = PROMPTS[selectedType][currentPromptIndex];
+      const newResponse: PromptResponse = {
+        promptId: prompt.id,
+        styleType: selectedType,
+        prompt: prompt.context,
+        response: draftText.trim(),
+        savedAt: new Date().toISOString(),
       };
 
-      const newStyles = [...styles, newStyle];
-      await saveStyles(newStyles);
-      setCurrentSample('');
-      Alert.alert('Success', 'Writing sample added! The AI will learn from your style.');
+      // Replace existing response for this prompt or add new
+      const filtered = responses.filter((r) => r.promptId !== prompt.id);
+      const updated = [...filtered, newResponse];
+
+      await AsyncStorage.setItem(WRITING_STYLES_KEY, JSON.stringify(updated));
+      setResponses(updated);
+      setDraftText('');
+
+      // Check if all prompts for this type are answered
+      const typePrompts = PROMPTS[selectedType];
+      const answeredCount = updated.filter((r) => r.styleType === selectedType).length;
+
+      if (answeredCount >= typePrompts.length) {
+        Alert.alert(
+          'All Done!',
+          `You've completed all ${selectedType === 'close' ? 'Close Friends & Family' : selectedType === 'casual' ? 'Casual Friends' : 'Professional'} prompts. The AI now has a great understanding of your style for this category!`,
+          [{ text: 'Awesome!' }]
+        );
+      } else {
+        // Move to next unanswered prompt
+        const answeredIds = new Set(updated.map((r) => r.promptId));
+        const next = typePrompts.findIndex((p) => !answeredIds.has(p.id));
+        if (next >= 0) {
+          setCurrentPromptIndex(next);
+          const existingNext = updated.find((r) => r.promptId === typePrompts[next].id);
+          setDraftText(existingNext?.response || '');
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save your response. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDeleteSample = (id: string) => {
-    Alert.alert(
-      'Delete Sample',
-      'Are you sure you want to delete this writing sample?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const newStyles = styles.filter(s => s.id !== id);
-            await saveStyles(newStyles);
-          },
-        },
-      ]
-    );
+  const handlePromptNavigation = (index: number) => {
+    setCurrentPromptIndex(index);
+    const prompt = PROMPTS[selectedType][index];
+    const existing = responses.find((r) => r.promptId === prompt.id);
+    setDraftText(existing?.response || '');
   };
 
-  const getStylesByType = (type: string) => styles.filter(s => s.type === type);
-  const currentTypeInfo = STYLE_TYPES.find(t => t.value === selectedType)!;
+  const getCompletionForType = (type: StyleType): number => {
+    const total = PROMPTS[type].length;
+    const answered = responses.filter((r) => r.styleType === type).length;
+    return answered / total;
+  };
+
+  const isPromptAnswered = (promptId: string): boolean => {
+    return responses.some((r) => r.promptId === promptId);
+  };
+
+  const currentPrompts = PROMPTS[selectedType];
+  const currentPrompt = currentPrompts[currentPromptIndex];
+  const currentMeta = STYLE_META[selectedType];
+  const completionRatio = getCompletionForType(selectedType);
+  const answeredCount = responses.filter((r) => r.styleType === selectedType).length;
 
   if (loading) {
     return (
-      <View style={componentStyles.centerContainer}>
-        <ActivityIndicator size="large" color="#7C4DFF" />
+      <View style={s.centerContainer}>
+        <ActivityIndicator size="large" color={colors.secondary} />
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={componentStyles.container}
+    <KeyboardAvoidingView
+      style={s.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Intro */}
-        <Card style={componentStyles.introCard}>
+        <Card style={s.introCard}>
           <Card.Content>
-            <View style={componentStyles.introHeader}>
-              <Ionicons name="sparkles" size={24} color="#7C4DFF" />
-              <Text style={componentStyles.introTitle}>Teach the AI Your Style</Text>
+            <View style={s.introHeader}>
+              <Ionicons name="sparkles" size={22} color={colors.secondary} />
+              <Text style={s.introTitle}>Teach the AI Your Voice</Text>
             </View>
-            <Text style={componentStyles.introText}>
-              Add sample messages that show how you typically write to different people. 
-              The AI will learn your unique voice and generate suggestions that sound like you!
+            <Text style={s.introText}>
+              Respond to 3 real-life scenarios for each relationship type.
+              The AI uses your answers to generate messages that genuinely sound like you.
             </Text>
           </Card.Content>
         </Card>
 
         {/* Type Selector */}
-        <View style={componentStyles.typeSelector}>
+        <View style={s.typeSelector}>
           <SegmentedButtons
             value={selectedType}
-            onValueChange={(value) => setSelectedType(value as any)}
+            onValueChange={(value) => setSelectedType(value as StyleType)}
             buttons={[
-              { value: 'close', label: '💕 Close' },
+              { value: 'close', label: '❤️ Close' },
               { value: 'casual', label: '👋 Casual' },
               { value: 'professional', label: '💼 Pro' },
             ]}
           />
         </View>
 
-        {/* Current Type Description */}
-        <Card style={componentStyles.descriptionCard}>
+        {/* Progress for current type */}
+        <View style={s.progressSection}>
+          <View style={s.progressHeader}>
+            <Ionicons name={currentMeta.icon as any} size={18} color={currentMeta.color} />
+            <Text style={s.progressLabel}>{currentMeta.label}</Text>
+            <Text style={s.progressCount}>
+              {answeredCount}/{currentPrompts.length}
+            </Text>
+          </View>
+          <ProgressBar
+            progress={completionRatio}
+            color={currentMeta.color}
+            style={s.progressBar}
+          />
+          <Text style={s.progressDescription}>{currentMeta.description}</Text>
+        </View>
+
+        {/* Prompt Navigation Dots */}
+        <View style={s.dotsContainer}>
+          {currentPrompts.map((p, i) => {
+            const answered = isPromptAnswered(p.id);
+            const isActive = i === currentPromptIndex;
+            return (
+              <View
+                key={p.id}
+                style={s.dotWrapper}
+              >
+                <Button
+                  mode={isActive ? 'contained' : 'outlined'}
+                  compact
+                  onPress={() => handlePromptNavigation(i)}
+                  style={[
+                    s.dotButton,
+                    isActive && { backgroundColor: currentMeta.color },
+                    answered && !isActive && { borderColor: currentMeta.color },
+                  ]}
+                  labelStyle={[
+                    s.dotLabel,
+                    isActive && { color: '#FFFFFF' },
+                    answered && !isActive && { color: currentMeta.color },
+                  ]}
+                >
+                  {answered ? `✓ ${i + 1}` : `${i + 1}`}
+                </Button>
+                <Text style={s.dotScenario} numberOfLines={1}>
+                  {p.scenario}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Current Prompt */}
+        <Card style={s.promptCard}>
           <Card.Content>
-            <Text style={componentStyles.typeLabel}>{currentTypeInfo.label}</Text>
-            <Text style={componentStyles.typeDescription}>{currentTypeInfo.description}</Text>
+            <View style={s.scenarioHeader}>
+              <View style={[s.scenarioBadge, { backgroundColor: currentMeta.color + '18' }]}>
+                <Text style={[s.scenarioBadgeText, { color: currentMeta.color }]}>
+                  Scenario {currentPromptIndex + 1} of {currentPrompts.length}
+                </Text>
+              </View>
+              <Text style={s.scenarioTitle}>{currentPrompt.scenario}</Text>
+            </View>
+            <Text style={s.promptText}>{currentPrompt.context}</Text>
           </Card.Content>
         </Card>
 
-        {/* Add New Sample */}
-        <Card style={componentStyles.inputCard}>
+        {/* Response Input */}
+        <Card style={s.inputCard}>
           <Card.Content>
-            <Text style={componentStyles.inputLabel}>
-              Write a sample message:
-            </Text>
+            <Text style={s.inputLabel}>Your response:</Text>
             <TextInput
               mode="outlined"
               multiline
-              numberOfLines={4}
-              value={currentSample}
-              onChangeText={setCurrentSample}
-              placeholder={currentTypeInfo.placeholder}
-              style={componentStyles.textInput}
+              numberOfLines={5}
+              value={draftText}
+              onChangeText={setDraftText}
+              placeholder="Type exactly how you'd actually send this message..."
+              style={s.textInput}
+              outlineStyle={{ borderRadius: radii.md, borderColor: colors.border }}
             />
-            <Button 
-              mode="contained" 
-              onPress={handleAddSample}
-              loading={saving}
-              disabled={saving || !currentSample.trim()}
-              style={componentStyles.addButton}
-            >
-              Add Sample
-            </Button>
-          </Card.Content>
-        </Card>
-
-        {/* Existing Samples */}
-        <Text style={componentStyles.sectionTitle}>
-          Your {currentTypeInfo.label} Samples ({getStylesByType(selectedType).length})
-        </Text>
-
-        {getStylesByType(selectedType).length === 0 ? (
-          <Card style={componentStyles.emptyCard}>
-            <Card.Content>
-              <Text style={componentStyles.emptyText}>
-                No samples yet for {currentTypeInfo.label.toLowerCase()}. 
-                Add a few examples of how you naturally write to help the AI!
+            <View style={s.inputFooter}>
+              <Text style={s.charCount}>
+                {draftText.length} characters
+                {draftText.length > 0 && draftText.length < 20 && ' (minimum 20)'}
               </Text>
-            </Card.Content>
-          </Card>
-        ) : (
-          getStylesByType(selectedType).map((style) => (
-            <Card key={style.id} style={componentStyles.sampleCard}>
-              <Card.Content>
-                <View style={componentStyles.sampleHeader}>
-                  <Text style={componentStyles.sampleDate}>
-                    {new Date(style.createdAt).toLocaleDateString()}
-                  </Text>
-                  <IconButton
-                    icon="delete-outline"
-                    size={20}
-                    onPress={() => handleDeleteSample(style.id)}
-                  />
-                </View>
-                <Text style={componentStyles.sampleText}>"{style.sample}"</Text>
-              </Card.Content>
-            </Card>
-          ))
-        )}
-
-        {/* Tips */}
-        <Card style={componentStyles.tipsCard}>
-          <Card.Content>
-            <Text style={componentStyles.tipsTitle}>💡 Tips for Better Results</Text>
-            <Text style={componentStyles.tipItem}>• Add 2-3 samples per category</Text>
-            <Text style={componentStyles.tipItem}>• Include your typical greetings and sign-offs</Text>
-            <Text style={componentStyles.tipItem}>• Show how you use emojis, slang, or formal language</Text>
-            <Text style={componentStyles.tipItem}>• Include examples of different moods (happy, checking in, etc.)</Text>
+              <Button
+                mode="contained"
+                onPress={saveResponse}
+                loading={saving}
+                disabled={saving || !draftText.trim()}
+                style={[s.saveButton, { backgroundColor: currentMeta.color }]}
+                labelStyle={s.saveButtonLabel}
+              >
+                {isPromptAnswered(currentPrompt.id) ? 'Update Response' : 'Save Response'}
+              </Button>
+            </View>
           </Card.Content>
         </Card>
 
-        <View style={componentStyles.bottomPadding} />
+        {/* Overall Progress */}
+        <Card style={s.overallCard}>
+          <Card.Content>
+            <Text style={s.overallTitle}>Overall Progress</Text>
+            {(['close', 'casual', 'professional'] as StyleType[]).map((type) => {
+              const meta = STYLE_META[type];
+              const answered = responses.filter((r) => r.styleType === type).length;
+              const total = PROMPTS[type].length;
+              const ratio = answered / total;
+              return (
+                <View key={type} style={s.overallRow}>
+                  <View style={s.overallRowHeader}>
+                    <Ionicons name={meta.icon as any} size={16} color={meta.color} />
+                    <Text style={s.overallRowLabel}>{meta.label}</Text>
+                    <Text style={[s.overallRowCount, ratio >= 1 && { color: colors.success }]}>
+                      {ratio >= 1 ? '✓ Complete' : `${answered}/${total}`}
+                    </Text>
+                  </View>
+                  <ProgressBar progress={ratio} color={meta.color} style={s.overallRowBar} />
+                </View>
+              );
+            })}
+            <Text style={s.overallHint}>
+              {responses.length === 9
+                ? 'All prompts completed! The AI has a strong understanding of your writing style.'
+                : `${9 - responses.length} more response${9 - responses.length === 1 ? '' : 's'} to fully train the AI.`}
+            </Text>
+          </Card.Content>
+        </Card>
+
+        <View style={s.bottomPadding} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const componentStyles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.surface,
   },
   centerContainer: {
     flex: 1,
@@ -271,121 +431,193 @@ const componentStyles = StyleSheet.create({
     alignItems: 'center',
   },
   introCard: {
-    margin: 16,
-    backgroundColor: '#F3E5FF',
-    borderRadius: 12,
+    margin: spacing.lg,
+    backgroundColor: colors.secondary + '12',
+    borderRadius: radii.lg,
+    ...shadows.subtle,
   },
   introHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
   introTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#7C4DFF',
-    marginLeft: 8,
+    ...typography.h4,
+    color: colors.secondary,
   },
   introText: {
-    fontSize: 14,
-    color: '#555',
+    ...typography.bodySmall,
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   typeSelector: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  descriptionCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 12,
+  progressSection: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  typeLabel: {
-    fontSize: 16,
+  progressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  progressLabel: {
+    ...typography.bodySmall,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    color: colors.textPrimary,
+    flex: 1,
   },
-  typeDescription: {
-    fontSize: 14,
-    color: '#666',
+  progressCount: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  progressBar: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+  },
+  progressDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  dotWrapper: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dotButton: {
+    borderRadius: radii.md,
+    minWidth: 0,
+  },
+  dotLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dotScenario: {
+    ...typography.captionSmall,
+    color: colors.textSecondary,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  promptCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: '#FFFFFF',
+    ...shadows.light,
+  },
+  scenarioHeader: {
+    marginBottom: spacing.md,
+  },
+  scenarioBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.full,
+    marginBottom: spacing.sm,
+  },
+  scenarioBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  scenarioTitle: {
+    ...typography.h4,
+    color: colors.textPrimary,
+  },
+  promptText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    lineHeight: 22,
   },
   inputCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 12,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: '#FFFFFF',
+    ...shadows.light,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 8,
+    ...typography.bodySmall,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
   },
   textInput: {
-    marginBottom: 12,
-    maxHeight: 150,
+    marginBottom: spacing.sm,
+    maxHeight: 180,
+    backgroundColor: colors.surface,
   },
-  addButton: {
-    backgroundColor: '#7C4DFF',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginHorizontal: 16,
-    marginBottom: 12,
-  },
-  emptyCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 12,
-    borderStyle: 'dashed',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    backgroundColor: '#fafafa',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  sampleCard: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    borderRadius: 10,
-  },
-  sampleHeader: {
+  inputFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
   },
-  sampleDate: {
-    fontSize: 12,
-    color: '#999',
+  charCount: {
+    ...typography.captionSmall,
+    color: colors.textTertiary,
   },
-  sampleText: {
-    fontSize: 14,
-    color: '#333',
-    fontStyle: 'italic',
-    lineHeight: 20,
+  saveButton: {
+    borderRadius: radii.md,
   },
-  tipsCard: {
-    margin: 16,
-    backgroundColor: '#FFF8E1',
-    borderRadius: 12,
-  },
-  tipsTitle: {
-    fontSize: 15,
+  saveButtonLabel: {
+    color: '#FFFFFF',
     fontWeight: '600',
-    color: '#F57C00',
-    marginBottom: 8,
   },
-  tipItem: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 4,
+  overallCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: '#FFFFFF',
+    ...shadows.light,
+  },
+  overallTitle: {
+    ...typography.h5,
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
+  },
+  overallRow: {
+    marginBottom: spacing.md,
+  },
+  overallRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  overallRowLabel: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  overallRowCount: {
+    ...typography.captionSmall,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  overallRowBar: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+  },
+  overallHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    fontStyle: 'italic',
   },
   bottomPadding: {
     height: 40,

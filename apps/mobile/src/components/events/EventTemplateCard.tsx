@@ -12,10 +12,10 @@ interface EventTemplateCardProps {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  social: '#2196F3',
-  outdoor: '#4CAF50',
+  social: '#5AC8FA',
+  outdoor: '#34C759',
   celebration: '#E91E63',
-  professional: '#607D8B',
+  professional: '#8E8E93',
   wellness: '#00BCD4',
   entertainment: '#9C27B0',
   holiday: '#FF5722',

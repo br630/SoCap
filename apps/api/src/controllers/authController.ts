@@ -363,11 +363,21 @@ export async function getProfile(req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
-    // Get user stats
+    // Get user stats — only count current/active data
     const [contacts, relationships, events, savingsGoals, reminders] = await Promise.all([
       prisma.contact.count({ where: { userId: localUser.id, isDeleted: false } }),
-      prisma.relationship.count({ where: { userId: localUser.id } }),
-      prisma.event.count({ where: { userId: localUser.id } }),
+      prisma.relationship.count({
+        where: {
+          userId: localUser.id,
+          contact: { isDeleted: false },  // Exclude relationships for deleted contacts
+        },
+      }),
+      prisma.event.count({
+        where: {
+          userId: localUser.id,
+          status: { not: 'CANCELLED' },  // Count all events except cancelled
+        },
+      }),
       prisma.savingsGoal.count({ where: { userId: localUser.id } }),
       prisma.reminder.count({ where: { userId: localUser.id, status: 'PENDING' } }),
     ]);
@@ -380,6 +390,7 @@ export async function getProfile(req: AuthenticatedRequest, res: Response): Prom
         firstName: localUser.firstName,
         lastName: localUser.lastName,
         profileImage: localUser.profileImage,
+        bio: localUser.bio,
         timezone: localUser.timezone,
         isVerified: localUser.isVerified,
         createdAt: localUser.createdAt,
@@ -435,7 +446,10 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response): P
     if (validatedData.firstName !== undefined) updateData.firstName = validatedData.firstName;
     if (validatedData.lastName !== undefined) updateData.lastName = validatedData.lastName;
     if (validatedData.profileImage !== undefined) {
-      updateData.profileImage = validatedData.profileImage === '' ? undefined : validatedData.profileImage;
+      updateData.profileImage = validatedData.profileImage === '' ? null : validatedData.profileImage;
+    }
+    if (validatedData.bio !== undefined) {
+      updateData.bio = validatedData.bio === '' ? null : validatedData.bio;
     }
     if (validatedData.timezone !== undefined) updateData.timezone = validatedData.timezone;
 
@@ -450,6 +464,7 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response): P
         firstName: updatedUser.firstName,
         lastName: updatedUser.lastName,
         profileImage: updatedUser.profileImage,
+        bio: updatedUser.bio,
         timezone: updatedUser.timezone,
       },
     });

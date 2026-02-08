@@ -53,7 +53,7 @@ export default function JailbreakWarning({
         <Card style={styles.card}>
           <Card.Content>
             <View style={styles.iconContainer}>
-              <Ionicons name="warning" size={48} color="#FF9800" />
+              <Ionicons name="warning" size={48} color="#FF9500" />
             </View>
 
             <Text style={styles.title}>Security Warning</Text>
@@ -79,7 +79,7 @@ export default function JailbreakWarning({
                     mode="contained"
                     onPress={handleExit}
                     style={styles.button}
-                    buttonColor="#F44336"
+                    buttonColor="#FF3B30"
                   >
                     Exit App
                   </Button>
@@ -89,7 +89,7 @@ export default function JailbreakWarning({
                   mode="contained"
                   onPress={handleExit}
                   style={styles.button}
-                  buttonColor="#F44336"
+                  buttonColor="#FF3B30"
                 >
                   Exit App
                 </Button>
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   },
   warning: {
     fontSize: 13,
-    color: '#FF9800',
+    color: '#FF9500',
     textAlign: 'center',
     marginBottom: 24,
     fontWeight: '600',

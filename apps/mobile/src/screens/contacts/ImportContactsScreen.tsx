@@ -117,7 +117,7 @@ export default function ImportContactsScreen() {
               <Text variant="bodyMedium" style={styles.progressText}>
                 Importing contacts...
               </Text>
-              <ProgressBar progress={progress} color="#2196F3" style={styles.progressBar} />
+              <ProgressBar progress={progress} color="#5AC8FA" style={styles.progressBar} />
             </Card.Content>
           </Card>
         )}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet, View } from 'react-native';
 import { IconButton, Text, useTheme } from 'react-native-paper';
+import { colors, shadows, radii, spacing } from '../../theme/paperTheme';
 
 interface QuickActionButtonProps {
   icon: string;
@@ -14,11 +15,11 @@ export default function QuickActionButton({ icon, label, onPress, color }: Quick
 
   return (
     <TouchableOpacity onPress={onPress} style={styles.container} activeOpacity={0.7}>
-      <View style={[styles.iconContainer, color && { backgroundColor: color + '20' }]}>
+      <View style={styles.iconContainer}>
         <IconButton
           icon={icon}
           size={24}
-          iconColor={color || theme.colors.primary}
+          iconColor={color || colors.textSecondary}
           style={styles.icon}
         />
       </View>
@@ -35,19 +36,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#F5F5F5',
+    width: 52,
+    height: 52,
+    borderRadius: radii.md,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: spacing.sm,
+    ...shadows.light,
   },
   icon: {
     margin: 0,
   },
   label: {
     textAlign: 'center',
-    opacity: 0.7,
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

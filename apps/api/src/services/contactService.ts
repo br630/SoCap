@@ -8,6 +8,7 @@ export interface CreateContactData {
   phone?: string;
   email?: string;
   profileImage?: string;
+  bio?: string;
   birthday?: Date;
   anniversary?: Date;
   notes?: string;
@@ -19,6 +20,7 @@ export interface UpdateContactData {
   phone?: string;
   email?: string;
   profileImage?: string;
+  bio?: string;
   birthday?: Date;
   anniversary?: Date;
   notes?: string;

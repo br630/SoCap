@@ -35,7 +35,7 @@ export default function RelationshipTipCard({ fallbackTip }: RelationshipTipCard
     return (
       <Card style={styles.card}>
         <Card.Content style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#7C4DFF" />
+          <ActivityIndicator size="small" color="#5856D6" />
           <Text style={styles.loadingText}>Getting today's insight...</Text>
         </Card.Content>
       </Card>
@@ -82,7 +82,7 @@ export default function RelationshipTipCard({ fallbackTip }: RelationshipTipCard
         {/* Action Item */}
         <View style={styles.actionContainer}>
           <View style={styles.actionIcon}>
-            <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
+            <Ionicons name="checkmark-circle" size={18} color="#34C759" />
           </View>
           <Text style={styles.actionText}>
             <Text style={styles.actionLabel}>Today's action: </Text>
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   actionContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#4CAF5015',
+    backgroundColor: '#34C75915',
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontWeight: '600',
-    color: '#4CAF50',
+    color: '#34C759',
   },
   sourceText: {
     fontSize: 12,

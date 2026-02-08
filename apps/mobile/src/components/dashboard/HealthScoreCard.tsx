@@ -3,6 +3,8 @@ import { View, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, shadows, radii, spacing } from '../../theme/paperTheme';
 
 interface HealthScoreCardProps {
   score: number;
@@ -15,7 +17,7 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 export default function HealthScoreCard({ score, trend, onPress }: HealthScoreCardProps) {
   const animatedValue = useRef(new Animated.Value(0)).current;
   const size = 120;
-  const strokeWidth = 12;
+  const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
@@ -32,136 +34,107 @@ export default function HealthScoreCard({ score, trend, onPress }: HealthScoreCa
     outputRange: [circumference, 0],
   });
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return '#4CAF50';
-    if (score >= 60) return '#FFB300';
-    if (score >= 40) return '#FF9800';
-    return '#F44336';
-  };
-
-  const getTrendIcon = () => {
-    if (trend > 0) return 'trending-up';
-    if (trend < 0) return 'trending-down';
-    return 'remove';
-  };
-
-  const getTrendColor = () => {
-    if (trend > 0) return '#4CAF50';
-    if (trend < 0) return '#F44336';
-    return '#666';
+  const getStatusMessage = (score: number) => {
+    if (score >= 80) return 'Your relationships are thriving!';
+    if (score >= 60) return 'Your relationships are doing well';
+    if (score >= 40) return 'Some relationships need attention';
+    return 'Time to reconnect with your network';
   };
 
   return (
     <TouchableOpacity
-      style={styles.card}
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={0.85}
+      style={styles.cardWrapper}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Health Score</Text>
-        <View style={[styles.trendBadge, { backgroundColor: getTrendColor() + '20' }]}>
-          <Ionicons
-            name={getTrendIcon()}
-            size={14}
-            color={getTrendColor()}
-          />
-          <Text style={[styles.trendText, { color: getTrendColor() }]}>
-            {trend > 0 ? '+' : ''}{trend}
-          </Text>
-        </View>
-      </View>
+      <LinearGradient
+        colors={[colors.gradientStart, colors.gradientEnd]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.card}
+      >
+        <Text style={styles.title}>Relationship Health</Text>
 
-      <View style={styles.scoreContainer}>
-        <View style={styles.circleContainer}>
-          <Svg width={size} height={size} style={styles.svg}>
-            {/* Background circle */}
-            <Circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              stroke="#E0E0E0"
-              strokeWidth={strokeWidth}
-              fill="transparent"
-            />
-            {/* Animated progress circle */}
-            <AnimatedCircle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              stroke={getScoreColor(score)}
-              strokeWidth={strokeWidth}
-              fill="transparent"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            />
-          </Svg>
-          <View style={styles.scoreTextContainer}>
-            <Text style={[styles.scoreText, { color: getScoreColor(score) }]}>
-              {score}
-            </Text>
-            <Text style={styles.scoreLabel}>/ 100</Text>
+        <View style={styles.scoreContainer}>
+          <View style={styles.circleContainer}>
+            <Svg width={size} height={size}>
+              {/* Background circle */}
+              <Circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                stroke="rgba(255,255,255,0.2)"
+                strokeWidth={strokeWidth}
+                fill="transparent"
+              />
+              {/* Progress circle */}
+              <AnimatedCircle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                stroke="#FFFFFF"
+                strokeWidth={strokeWidth}
+                fill="transparent"
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                transform={`rotate(-90 ${size / 2} ${size / 2})`}
+              />
+            </Svg>
+            <View style={styles.scoreTextContainer}>
+              <Text style={styles.scoreText}>{score}/100</Text>
+              {trend !== 0 && (
+                <View style={styles.trendBadge}>
+                  <Ionicons
+                    name={trend > 0 ? 'arrow-up' : 'arrow-down'}
+                    size={10}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.trendText}>
+                    {trend > 0 ? '+' : ''}{trend} this week
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={styles.footer}>
-        <Ionicons name="information-circle-outline" size={16} color="#666" />
-        <Text style={styles.footerText}>Tap for details</Text>
-      </View>
+        <Text style={styles.statusMessage}>{getStatusMessage(score)}</Text>
+      </LinearGradient>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  cardWrapper: {
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.sm,
+    borderRadius: radii.xl,
+    ...shadows.medium,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  card: {
+    borderRadius: radii.xl,
+    padding: spacing.xl,
     alignItems: 'center',
-    marginBottom: 16,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  trendBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  trendText: {
-    fontSize: 12,
+    fontSize: 17,
     fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: -0.2,
+    marginBottom: spacing.lg,
   },
   scoreContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 8,
+    marginVertical: spacing.sm,
   },
   circleContainer: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  svg: {
-    position: 'absolute',
+    width: 120,
+    height: 120,
   },
   scoreTextContainer: {
     position: 'absolute',
@@ -169,23 +142,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scoreText: {
-    fontSize: 36,
+    fontSize: 22,
     fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
   },
-  scoreLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: -4,
-  },
-  footer: {
+  trendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+    marginTop: spacing.xs,
+    gap: 2,
   },
-  footerText: {
-    fontSize: 12,
-    color: '#666',
+  trendText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  statusMessage: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.9)',
+    letterSpacing: -0.2,
+    marginTop: spacing.md,
+    textAlign: 'center',
   },
 });

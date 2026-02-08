@@ -238,7 +238,7 @@ export default function CalendarSettingsScreen() {
                   </View>
                 </View>
                 {calendar.allowsModifications ? (
-                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                  <Ionicons name="checkmark-circle" size={20} color="#34C759" />
                 ) : (
                   <Ionicons name="lock-closed" size={20} color="#ccc" />
                 )}

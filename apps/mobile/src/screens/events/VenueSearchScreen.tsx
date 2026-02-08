@@ -101,7 +101,7 @@ export default function VenueSearchScreen() {
                 <Text
                   style={[
                     styles.openText,
-                    { color: item.openNow ? '#4CAF50' : '#F44336' },
+                    { color: item.openNow ? '#34C759' : '#FF3B30' },
                   ]}
                 >
                   {item.openNow ? 'Open' : 'Closed'}
@@ -163,7 +163,7 @@ export default function VenueSearchScreen() {
         </View>
       ) : error ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="warning-outline" size={48} color="#F44336" />
+          <Ionicons name="warning-outline" size={48} color="#FF3B30" />
           <Text style={styles.errorText}>Search failed</Text>
           <Text style={styles.errorSubtext}>{error.message}</Text>
         </View>
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#F44336',
+    color: '#FF3B30',
     marginTop: 16,
   },
   errorSubtext: {
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
   priceLevel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: '#34C759',
   },
   openBadge: {
     paddingHorizontal: 6,

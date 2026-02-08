@@ -14,11 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import eventService, { Event, EventStatus } from '../../services/eventService';
 
 const EVENT_STATUSES: { value: EventStatus; label: string; color: string; icon: string }[] = [
-  { value: 'DRAFT', label: 'Draft', color: '#9E9E9E', icon: 'document-outline' },
-  { value: 'PLANNING', label: 'Planning', color: '#FF9800', icon: 'time-outline' },
-  { value: 'CONFIRMED', label: 'Confirmed', color: '#4CAF50', icon: 'checkmark-circle' },
-  { value: 'COMPLETED', label: 'Completed', color: '#607D8B', icon: 'checkmark-done' },
-  { value: 'CANCELLED', label: 'Cancelled', color: '#F44336', icon: 'close-circle' },
+  { value: 'DRAFT', label: 'Draft', color: '#8E8E93', icon: 'document-outline' },
+  { value: 'PLANNING', label: 'Planning', color: '#FF9500', icon: 'time-outline' },
+  { value: 'CONFIRMED', label: 'Confirmed', color: '#34C759', icon: 'checkmark-circle' },
+  { value: 'COMPLETED', label: 'Completed', color: '#8E8E93', icon: 'checkmark-done' },
+  { value: 'CANCELLED', label: 'Cancelled', color: '#FF3B30', icon: 'close-circle' },
 ];
 
 export default function EventsScreen() {
@@ -31,7 +31,7 @@ export default function EventsScreen() {
           style={{ marginRight: 16 }}
           onPress={() => navigation.navigate('AddEditEvent' as never)}
         >
-          <Ionicons name="add-circle" size={28} color="#7C4DFF" />
+          <Ionicons name="add-circle" size={28} color="#5856D6" />
         </TouchableOpacity>
       ),
     });
@@ -140,15 +140,15 @@ export default function EventsScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'CONFIRMED':
-        return '#4CAF50';
+        return '#34C759';
       case 'PLANNING':
-        return '#FF9800';
+        return '#FF9500';
       case 'COMPLETED':
-        return '#9E9E9E';
+        return '#8E8E93';
       case 'CANCELLED':
-        return '#F44336';
+        return '#FF3B30';
       default:
-        return '#2196F3';
+        return '#5AC8FA';
     }
   };
 
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
   },
   createButton: {
     marginTop: 20,
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,

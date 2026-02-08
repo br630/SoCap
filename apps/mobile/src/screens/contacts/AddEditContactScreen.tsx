@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Platform, Image } from 'react-native';
 import {
   TextInput,
   Button,
@@ -13,11 +13,15 @@ import {
   Card,
 } from 'react-native-paper';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useContact } from '../../hooks/useContact';
 import { useContacts } from '../../hooks/useContacts';
-import { CreateContactData, UpdateContactData } from '../../services/contactService';
+import contactService, { CreateContactData, UpdateContactData } from '../../services/contactService';
+import { ContactStackParamList } from '../../types/navigation';
 import { Ionicons } from '@expo/vector-icons';
-import { DatePickerModal } from '../../components/common';
+import { CalendarPicker } from '../../components/common';
+import * as ImagePicker from 'expo-image-picker';
+import { colors, spacing, radii, shadows } from '../../theme/paperTheme';
 
 const RELATIONSHIP_TYPES = ['FAMILY', 'FRIEND', 'COLLEAGUE', 'ROMANTIC', 'OTHER'] as const;
 
@@ -59,7 +63,7 @@ const TIERS_BY_TYPE: Record<typeof RELATIONSHIP_TYPES[number], { value: string; 
 
 export default function AddEditContactScreen() {
   const route = useRoute();
-  const navigation = useNavigation();
+  const navigation = useNavigation<StackNavigationProp<ContactStackParamList>>();
   const { contactId } = (route.params as { contactId?: string }) || {};
   const isEditing = !!contactId;
 
@@ -67,13 +71,15 @@ export default function AddEditContactScreen() {
     contactId || '',
     isEditing
   );
-  const { createContact, isCreating } = useContacts();
+  const { createContactAsync, isCreating } = useContacts();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
-  const [tier, setTier] = useState<string>('ACQUAINTANCES');
+  const [bio, setBio] = useState('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [tier, setTier] = useState<'INNER_CIRCLE' | 'CLOSE_FRIENDS' | 'FRIENDS' | 'ACQUAINTANCES' | 'PROFESSIONAL'>('ACQUAINTANCES');
   const [relationshipType, setRelationshipType] = useState<'FAMILY' | 'FRIEND' | 'COLLEAGUE' | 'ROMANTIC' | 'OTHER'>(
     'OTHER'
   );
@@ -88,7 +94,7 @@ export default function AddEditContactScreen() {
     // Set tier to the first available tier for this relationship type
     const newTiers = TIERS_BY_TYPE[type];
     if (newTiers.length > 0 && !newTiers.some(t => t.value === tier)) {
-      setTier(newTiers[0].value);
+      setTier(newTiers[0].value as typeof tier);
     }
   };
   const [sharedInterests, setSharedInterests] = useState<string[]>([]);
@@ -112,23 +118,57 @@ export default function AddEditContactScreen() {
       setPhone(contact.phone || '');
       setEmail(contact.email || '');
       setNotes(contact.notes || '');
+      setBio(contact.bio || '');
+      setProfileImage(contact.profileImage || null);
       setBirthday(contact.birthday ? new Date(contact.birthday) : null);
       setAnniversary(contact.anniversary ? new Date(contact.anniversary) : null);
-      if (contact.importantEvents) {
+      // importantEvents may come from the API as extra data
+      const contactAny = contact as any;
+      if (contactAny.importantEvents) {
         setImportantEvents(
-          contact.importantEvents.map((e: any) => ({
+          contactAny.importantEvents.map((e: any) => ({
             name: e.name,
             date: new Date(e.date),
           }))
         );
       }
       if (contact.relationship) {
-        setTier(contact.relationship.tier);
-        setRelationshipType(contact.relationship.relationshipType);
+        setTier(contact.relationship.tier as typeof tier);
+        setRelationshipType(contact.relationship.relationshipType as typeof relationshipType);
         setSharedInterests(contact.relationship.sharedInterests || []);
       }
     }
   }, [contact]);
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please grant camera roll permissions to add a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      if (asset.base64) {
+        const mimeType = asset.mimeType || 'image/jpeg';
+        setProfileImage(`data:${mimeType};base64,${asset.base64}`);
+      } else if (asset.uri) {
+        setProfileImage(asset.uri);
+      }
+    }
+  };
+
+  const removeImage = () => {
+    setProfileImage(null);
+  };
 
   const handleAddInterest = () => {
     if (newInterest.trim() && !sharedInterests.includes(newInterest.trim())) {
@@ -173,6 +213,8 @@ export default function AddEditContactScreen() {
           name: name.trim(),
           phone: phone.trim() || undefined,
           email: email.trim() || undefined,
+          bio: bio.trim() || undefined,
+          profileImage: profileImage || undefined,
           notes: notes.trim() || undefined,
           birthday: birthday?.toISOString() || undefined,
           anniversary: anniversary?.toISOString() || undefined,
@@ -197,6 +239,8 @@ export default function AddEditContactScreen() {
           name: name.trim(),
           phone: phone.trim() || undefined,
           email: email.trim() || undefined,
+          bio: bio.trim() || undefined,
+          profileImage: profileImage || undefined,
           notes: notes.trim() || undefined,
           birthday: birthday?.toISOString() || undefined,
           anniversary: anniversary?.toISOString() || undefined,
@@ -206,11 +250,21 @@ export default function AddEditContactScreen() {
           importSource: 'MANUAL',
         };
 
-        await createContact(contactData);
+        const newContact = await createContactAsync(contactData);
 
-        Alert.alert('Success', 'Contact created successfully', [
-          { text: 'OK', onPress: () => navigation.goBack() },
-        ]);
+        // Update the relationship with user-selected tier, type, and interests
+        try {
+          await contactService.updateRelationship(newContact.id, {
+            tier,
+            relationshipType,
+            sharedInterests: sharedInterests.length > 0 ? sharedInterests : undefined,
+          });
+        } catch (relError) {
+          console.warn('Failed to update relationship after creation:', relError);
+        }
+
+        // Navigate directly to the new contact's detail screen
+        navigation.replace('ContactDetail', { id: newContact.id });
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to save contact. Please try again.');
@@ -232,6 +286,28 @@ export default function AddEditContactScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
+        {/* Profile Picture */}
+        <View style={styles.profileSection}>
+          <TouchableOpacity onPress={pickImage} style={styles.avatarContainer}>
+            {profileImage ? (
+              <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="camera" size={32} color={colors.textSecondary} />
+                <Text style={styles.avatarPlaceholderText}>Add Photo</Text>
+              </View>
+            )}
+            <View style={styles.cameraIconBadge}>
+              <Ionicons name="camera" size={14} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+          {profileImage && (
+            <TouchableOpacity onPress={removeImage} style={styles.removePhotoButton}>
+              <Text style={styles.removePhotoText}>Remove Photo</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <TextInput
           label="Name *"
           value={name}
@@ -259,6 +335,19 @@ export default function AddEditContactScreen() {
           style={styles.input}
         />
 
+        <TextInput
+          label="Bio"
+          value={bio}
+          onChangeText={setBio}
+          mode="outlined"
+          multiline
+          numberOfLines={3}
+          maxLength={500}
+          placeholder="A short bio about this contact..."
+          style={styles.input}
+          right={<TextInput.Affix text={`${bio.length}/500`} />}
+        />
+
         {/* Important Dates Section */}
         <Text variant="titleMedium" style={styles.sectionTitle}>
           Important Dates
@@ -270,7 +359,7 @@ export default function AddEditContactScreen() {
           onPress={() => setShowBirthdayPicker(true)}
         >
           <View style={styles.dateInfo}>
-            <Ionicons name="gift-outline" size={20} color="#7C4DFF" />
+            <Ionicons name="gift-outline" size={20} color="#5856D6" />
             <View style={styles.dateTextContainer}>
               <Text style={styles.dateLabel}>Birthday</Text>
               <Text style={styles.dateValue}>{formatDate(birthday)}</Text>
@@ -342,21 +431,23 @@ export default function AddEditContactScreen() {
           )}
         </View>
 
-        {/* Date Pickers - Cross-platform modals */}
-        <DatePickerModal
+        {/* Date Pickers - Year → Month → Day calendar */}
+        <CalendarPicker
           visible={showBirthdayPicker}
-          value={birthday || new Date()}
+          value={birthday || new Date(2000, 0, 1)}
           title="Select Birthday"
+          maximumDate={new Date()}
           onConfirm={(date) => {
             setBirthday(date);
             setShowBirthdayPicker(false);
           }}
           onCancel={() => setShowBirthdayPicker(false)}
         />
-        <DatePickerModal
+        <CalendarPicker
           visible={showAnniversaryPicker}
           value={anniversary || new Date()}
           title="Select Anniversary"
+          maximumDate={new Date()}
           onConfirm={(date) => {
             setAnniversary(date);
             setShowAnniversaryPicker(false);
@@ -382,7 +473,7 @@ export default function AddEditContactScreen() {
         </Text>
         <SegmentedButtons
           value={tier}
-          onValueChange={(value) => setTier(value)}
+          onValueChange={(value) => setTier(value as typeof tier)}
           buttons={availableTiers}
           style={styles.segmentedButtons}
         />
@@ -426,8 +517,8 @@ export default function AddEditContactScreen() {
         <Button
           mode="contained"
           onPress={handleSave}
-          loading={saving || isCreating}
-          disabled={saving || isCreating || !name.trim()}
+          loading={saving}
+          disabled={saving || !name.trim()}
           style={styles.saveButton}
         >
           {isEditing ? 'Update Contact' : 'Create Contact'}
@@ -468,8 +559,8 @@ export default function AddEditContactScreen() {
         </Dialog>
       </Portal>
 
-      {/* New Event Date Picker - Outside Portal to avoid z-index issues */}
-      <DatePickerModal
+      {/* New Event Date Picker - Year → Month → Day calendar */}
+      <CalendarPicker
         visible={showNewEventDatePicker}
         value={newEventDate}
         title="Select Event Date"
@@ -495,6 +586,60 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+  },
+  profileSection: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+    paddingTop: spacing.sm,
+  },
+  avatarContainer: {
+    position: 'relative',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    ...shadows.light,
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  avatarPlaceholderText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  removePhotoButton: {
+    marginTop: spacing.sm,
+  },
+  removePhotoText: {
+    color: colors.error,
+    fontSize: 13,
+    fontWeight: '500',
   },
   input: {
     marginBottom: 16,

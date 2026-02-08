@@ -16,9 +16,9 @@ const interactionIcons: Record<Interaction['type'], string> = {
 };
 
 const sentimentColors: Record<string, string> = {
-  POSITIVE: '#4CAF50',
-  NEUTRAL: '#9E9E9E',
-  NEGATIVE: '#F44336',
+  POSITIVE: '#34C759',
+  NEUTRAL: '#8E8E93',
+  NEGATIVE: '#FF3B30',
 };
 
 export default function InteractionItem({ interaction }: InteractionItemProps) {

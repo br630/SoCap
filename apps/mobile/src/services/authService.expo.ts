@@ -19,6 +19,7 @@ export interface User {
   firstName: string;
   lastName: string;
   profileImage?: string;
+  bio?: string;
   timezone: string;
   isVerified: boolean;
 }
@@ -40,6 +41,7 @@ export interface UpdateProfileData {
   firstName?: string;
   lastName?: string;
   profileImage?: string;
+  bio?: string;
   timezone?: string;
 }
 

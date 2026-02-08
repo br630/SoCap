@@ -62,28 +62,28 @@ export default function ContactEventsScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'CONFIRMED':
-        return '#4CAF50';
+        return '#34C759';
       case 'PLANNING':
-        return '#FF9800';
+        return '#FF9500';
       case 'CANCELLED':
-        return '#F44336';
+        return '#FF3B30';
       case 'COMPLETED':
-        return '#9E9E9E';
+        return '#8E8E93';
       default:
-        return '#2196F3';
+        return '#5AC8FA';
     }
   };
 
   const getRSVPColor = (rsvpStatus?: string) => {
     switch (rsvpStatus) {
       case 'ATTENDING':
-        return '#4CAF50';
+        return '#34C759';
       case 'MAYBE':
-        return '#FF9800';
+        return '#FF9500';
       case 'DECLINED':
-        return '#F44336';
+        return '#FF3B30';
       default:
-        return '#9E9E9E';
+        return '#8E8E93';
     }
   };
 
@@ -181,7 +181,7 @@ export default function ContactEventsScreen() {
   if (isLoading && !events?.length) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#7C4DFF" />
+        <ActivityIndicator size="large" color="#5856D6" />
         <Text style={styles.loadingText}>Loading events...</Text>
       </View>
     );
@@ -332,12 +332,12 @@ const styles = StyleSheet.create({
   },
   createButton: {
     marginTop: 24,
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
   },
   fab: {
     position: 'absolute',
     right: 16,
     bottom: 16,
-    backgroundColor: '#7C4DFF',
+    backgroundColor: '#5856D6',
   },
 });

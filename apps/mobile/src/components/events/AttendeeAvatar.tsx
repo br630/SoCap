@@ -12,9 +12,9 @@ interface AttendeeAvatarProps {
 }
 
 const RSVP_COLORS: Record<RSVPStatus, string> = {
-  PENDING: '#FF9800',
-  CONFIRMED: '#4CAF50',
-  DECLINED: '#F44336',
+  PENDING: '#FF9500',
+  CONFIRMED: '#34C759',
+  DECLINED: '#FF3B30',
   MAYBE: '#9C27B0',
 };
 

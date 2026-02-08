@@ -6,7 +6,7 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
-import { Text, Card, ActivityIndicator } from 'react-native-paper';
+import { Text, ActivityIndicator } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
 import { useDashboard } from '../../hooks/useDashboard';
@@ -19,6 +19,8 @@ import {
   RelationshipTipCard,
 } from '../../components/dashboard';
 import { TrendingInterestsCard } from '../../components/interests';
+import { colors, shadows, radii, spacing, typography } from '../../theme/paperTheme';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -31,15 +33,14 @@ export default function HomeScreen() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
   };
 
   const formatDate = () => {
     return new Date().toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
+      month: 'short',
       day: 'numeric',
     });
   };
@@ -63,7 +64,6 @@ export default function HomeScreen() {
   };
 
   const navigateToInsights = () => {
-    // Will be implemented when InsightsScreen is created
     navigation.navigate('Profile' as never, {
       screen: 'Insights',
     } as never);
@@ -72,7 +72,7 @@ export default function HomeScreen() {
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading dashboard...</Text>
       </View>
     );
@@ -92,15 +92,18 @@ export default function HomeScreen() {
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} />
+        <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor={colors.primary} />
       }
+      showsVerticalScrollIndicator={false}
     >
       {/* Greeting Section */}
       <View style={styles.greetingSection}>
-        <Text style={styles.greeting}>
-          {getGreeting()}, {user?.firstName || 'there'}! 👋
-        </Text>
-        <Text style={styles.date}>{formatDate()}</Text>
+        <View style={styles.greetingRow}>
+          <Text style={styles.greeting}>
+            {getGreeting()}, {user?.firstName || 'there'}!
+          </Text>
+          <Text style={styles.date}>{formatDate()}</Text>
+        </View>
       </View>
 
       {/* Health Score Card */}
@@ -110,16 +113,20 @@ export default function HomeScreen() {
         onPress={navigateToInsights}
       />
 
-      {/* Today's Reminders Card */}
+      {/* Today's Reminders */}
       {data.todayReminders.length > 0 && (
-        <Card style={styles.sectionCard}>
-          <Card.Content>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Today's Reminders</Text>
-              <TouchableOpacity onPress={navigateToReminders}>
-                <Text style={styles.seeAllText}>See All</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Today's Reminders</Text>
+            <TouchableOpacity onPress={navigateToReminders}>
+              <Text style={styles.seeAllText}>See All</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.remindersScroll}
+          >
             {data.todayReminders.slice(0, 3).map((reminder) => (
               <ReminderMiniCard
                 key={reminder.id}
@@ -133,55 +140,58 @@ export default function HomeScreen() {
                 }}
               />
             ))}
-          </Card.Content>
-        </Card>
+          </ScrollView>
+        </View>
       )}
 
-      {/* Quick Actions Row */}
-      <View style={styles.quickActionsContainer}>
-        <QuickActionButton
-          icon="chatbubble-ellipses-outline"
-          label="Log Interaction"
-          onPress={() => {
-            navigation.navigate('Contacts' as never, {
-              screen: 'ContactList',
-              params: { mode: 'log-interaction' },
-            } as never);
-          }}
-          color="#007AFF"
-        />
-        <QuickActionButton
-          icon="calendar-outline"
-          label="Plan Event"
-          onPress={() => {
-            navigation.navigate('Events' as never, {
-              screen: 'CreateEvent',
-            } as never);
-          }}
-          color="#4CAF50"
-        />
-        <QuickActionButton
-          icon="person-add-outline"
-          label="Add Contact"
-          onPress={() => {
-            navigation.navigate('Contacts' as never, {
-              screen: 'AddEditContact',
-              params: {},
-            } as never);
-          }}
-          color="#FF9800"
-        />
-        <QuickActionButton
-          icon="sparkles-outline"
-          label="AI Suggest"
-          onPress={() => {
-            navigation.navigate('Contacts' as never, {
-              screen: 'ContactList',
-              params: { mode: 'ai-suggest' },
-            } as never);
-          }}
-          color="#9C27B0"
-        />
+      {/* Quick Actions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.quickActionsContainer}>
+          <QuickActionButton
+            icon="document-text-outline"
+            label="Log Interaction"
+            onPress={() => {
+              navigation.navigate('Contacts' as never, {
+                screen: 'ContactList',
+                params: { mode: 'log-interaction' },
+              } as never);
+            }}
+            color={colors.primary}
+          />
+          <QuickActionButton
+            icon="calendar-outline"
+            label="Plan Event"
+            onPress={() => {
+              navigation.navigate('Events' as never, {
+                screen: 'CreateEvent',
+              } as never);
+            }}
+            color={colors.primary}
+          />
+          <QuickActionButton
+            icon="person-add-outline"
+            label="Add Contact"
+            onPress={() => {
+              navigation.navigate('Contacts' as never, {
+                screen: 'AddEditContact',
+                params: {},
+              } as never);
+            }}
+            color={colors.primary}
+          />
+          <QuickActionButton
+            icon="sparkles-outline"
+            label="AI Suggest"
+            onPress={() => {
+              navigation.navigate('Contacts' as never, {
+                screen: 'ContactList',
+                params: { mode: 'ai-suggest' },
+              } as never);
+            }}
+            color={colors.secondary}
+          />
+        </View>
       </View>
 
       {/* Contacts Needing Attention */}
@@ -195,13 +205,14 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Trending in Your Interests */}
-      <TrendingInterestsCard
-        onPressInterest={(interest) => {
-          // Navigate to contacts with this shared interest
-          navigation.navigate('Contacts' as never);
-        }}
-      />
+      {/* Trending Interests */}
+      <View style={styles.section}>
+        <TrendingInterestsCard
+          onPressInterest={(interest) => {
+            navigation.navigate('Contacts' as never);
+          }}
+        />
+      </View>
 
       {/* Upcoming Events */}
       {data.upcomingEvents.length > 0 && (
@@ -224,8 +235,10 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* AI-Powered Tip of the Day */}
+      {/* AI Tip */}
       <RelationshipTipCard fallbackTip={data.tipOfTheDay} />
+
+      <View style={{ height: spacing.xl }} />
     </ScrollView>
   );
 }
@@ -233,69 +246,71 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#666',
+    marginTop: spacing.md,
+    ...typography.bodySmall,
+    color: colors.textSecondary,
   },
   greetingSection: {
-    backgroundColor: '#fff',
-    padding: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
   },
   greeting: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 4,
+    ...typography.h3,
+    color: colors.textPrimary,
   },
   date: {
-    fontSize: 14,
-    color: '#666',
-  },
-  sectionCard: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 12,
+    ...typography.bodySmall,
+    fontWeight: '600',
+    color: colors.primary,
   },
   section: {
-    marginVertical: 8,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.xs,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 16,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a1a',
+    ...typography.h5,
+    color: colors.textPrimary,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
   seeAllText: {
-    fontSize: 14,
+    ...typography.caption,
     fontWeight: '600',
-    color: '#007AFF',
+    color: colors.primary,
+  },
+  remindersScroll: {
+    paddingHorizontal: spacing.lg,
   },
   quickActionsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    backgroundColor: '#fff',
-    marginVertical: 8,
-    marginHorizontal: 16,
-    borderRadius: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: spacing.lg,
+    borderRadius: radii.lg,
+    ...shadows.light,
   },
 });

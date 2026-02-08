@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -21,7 +21,7 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventMutations, useEventTemplates, useEvent } from '../../hooks/useEvents';
-import { DatePickerModal } from '../../components/common';
+import { DateRangePicker } from '../../components/common';
 import { EventTemplateCard, BudgetTierBadge } from '../../components/events';
 import {
   BudgetTier,
@@ -60,9 +60,7 @@ export default function CreateEventScreen() {
   const [date, setDate] = useState(new Date());
   const [startTime, setStartTime] = useState('18:00');
   const [endTime, setEndTime] = useState('21:00');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  // Date/time selection handled by DateRangePicker
 
   // Location
   const [locationName, setLocationName] = useState('');
@@ -86,6 +84,21 @@ export default function CreateEventScreen() {
   const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>([]);
   const [syncToCalendar, setSyncToCalendar] = useState(false);
   const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
+
+  // Convert string times to Date objects for the TimePicker
+  const startTimeAsDate = useMemo(() => {
+    const [h, m] = startTime.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  }, [startTime]);
+
+  const endTimeAsDate = useMemo(() => {
+    const [h, m] = endTime.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  }, [endTime]);
 
   const { templates, templatesByCategory, categories, isLoading: isLoadingTemplates } = useEventTemplates();
   const { createEventAsync, isCreating, updateEventAsync, isUpdating } = useEventMutations();
@@ -226,14 +239,8 @@ export default function CreateEventScreen() {
         ]);
       } else {
         savedEvent = await createEventAsync(eventData);
-        Alert.alert('Success', 'Event created successfully', [
-          {
-            text: 'Add Guests',
-            onPress: () =>
-              navigation.replace('SelectAttendees' as never, { eventId: savedEvent.id } as never),
-          },
-          { text: 'Done', onPress: () => navigation.goBack() },
-        ]);
+        // Navigate directly to the event detail page
+        navigation.replace('EventDetail' as never, { id: savedEvent.id } as never);
       }
 
       // Sync to calendar if requested
@@ -325,7 +332,7 @@ export default function CreateEventScreen() {
               <Ionicons
                 name={eventType === 'custom' ? 'checkmark-circle' : 'chevron-forward'}
                 size={24}
-                color={eventType === 'custom' ? '#4CAF50' : '#ccc'}
+                color={eventType === 'custom' ? '#34C759' : '#ccc'}
               />
             </TouchableOpacity>
 
@@ -386,51 +393,21 @@ export default function CreateEventScreen() {
               numberOfLines={3}
             />
 
-            {/* Date */}
-            <TouchableOpacity
-              style={styles.dateTimeButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Ionicons name="calendar-outline" size={20} color="#666" />
-              <View style={styles.dateTimeText}>
-                <Text style={styles.dateTimeLabel}>Date</Text>
-                <Text style={styles.dateTimeValue}>
-                  {date.toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </TouchableOpacity>
-
-            {/* Start Time */}
-            <TouchableOpacity
-              style={styles.dateTimeButton}
-              onPress={() => setShowStartTimePicker(true)}
-            >
-              <Ionicons name="time-outline" size={20} color="#666" />
-              <View style={styles.dateTimeText}>
-                <Text style={styles.dateTimeLabel}>Start Time</Text>
-                <Text style={styles.dateTimeValue}>{formatTime(startTime)}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </TouchableOpacity>
-
-            {/* End Time */}
-            <TouchableOpacity
-              style={styles.dateTimeButton}
-              onPress={() => setShowEndTimePicker(true)}
-            >
-              <Ionicons name="time-outline" size={20} color="#666" />
-              <View style={styles.dateTimeText}>
-                <Text style={styles.dateTimeLabel}>End Time</Text>
-                <Text style={styles.dateTimeValue}>{formatTime(endTime)}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </TouchableOpacity>
+            {/* Date & Time Range */}
+            <DateRangePicker
+              startDate={startTimeAsDate}
+              endDate={endTimeAsDate}
+              minimumDate={new Date()}
+              onApply={(start, end) => {
+                setDate(start);
+                const sh = start.getHours().toString().padStart(2, '0');
+                const sm = start.getMinutes().toString().padStart(2, '0');
+                setStartTime(`${sh}:${sm}`);
+                const eh = end.getHours().toString().padStart(2, '0');
+                const em = end.getMinutes().toString().padStart(2, '0');
+                setEndTime(`${eh}:${em}`);
+              }}
+            />
 
             {/* Conflict Warning */}
             {isCheckingConflicts ? (
@@ -484,45 +461,7 @@ export default function CreateEventScreen() {
               </View>
             )}
 
-            {/* Date/Time Pickers - Cross-platform modals */}
-            <DatePickerModal
-              visible={showDatePicker}
-              value={date}
-              mode="date"
-              title="Select Date"
-              minimumDate={new Date()}
-              onConfirm={(selectedDate) => {
-                setDate(selectedDate);
-                setShowDatePicker(false);
-              }}
-              onCancel={() => setShowDatePicker(false)}
-            />
-            <DatePickerModal
-              visible={showStartTimePicker}
-              value={new Date(`2000-01-01T${startTime}`)}
-              mode="time"
-              title="Select Start Time"
-              onConfirm={(selectedTime) => {
-                const hours = selectedTime.getHours().toString().padStart(2, '0');
-                const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
-                setStartTime(`${hours}:${minutes}`);
-                setShowStartTimePicker(false);
-              }}
-              onCancel={() => setShowStartTimePicker(false)}
-            />
-            <DatePickerModal
-              visible={showEndTimePicker}
-              value={new Date(`2000-01-01T${endTime}`)}
-              mode="time"
-              title="Select End Time"
-              onConfirm={(selectedTime) => {
-                const hours = selectedTime.getHours().toString().padStart(2, '0');
-                const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
-                setEndTime(`${hours}:${minutes}`);
-                setShowEndTimePicker(false);
-              }}
-              onCancel={() => setShowEndTimePicker(false)}
-            />
+            {/* Date/Time pickers replaced by DateRangePicker above */}
           </ScrollView>
         );
 
@@ -629,9 +568,9 @@ export default function CreateEventScreen() {
                 </Text>
               </View>
               {isLoadingIdeas ? (
-                <ActivityIndicator size="small" color="#7C4DFF" />
+                <ActivityIndicator size="small" color="#5856D6" />
               ) : (
-                <Ionicons name="chevron-forward" size={20} color="#7C4DFF" />
+                <Ionicons name="chevron-forward" size={20} color="#5856D6" />
               )}
             </TouchableOpacity>
 
@@ -710,8 +649,8 @@ export default function CreateEventScreen() {
 
                 {createSavingsGoal && (
                   <View style={styles.reviewRow}>
-                    <Ionicons name="save" size={18} color="#4CAF50" />
-                    <Text style={[styles.reviewText, { color: '#4CAF50' }]}>
+                    <Ionicons name="save" size={18} color="#34C759" />
+                    <Text style={[styles.reviewText, { color: '#34C759' }]}>
                       Savings goal will be created
                     </Text>
                   </View>
@@ -1003,7 +942,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#7C4DFF20',
+    borderColor: '#5856D620',
   },
   aiButtonIcon: {
     fontSize: 24,
@@ -1015,7 +954,7 @@ const styles = StyleSheet.create({
   aiButtonTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#7C4DFF',
+    color: '#5856D6',
   },
   aiButtonSubtitle: {
     fontSize: 12,
@@ -1037,7 +976,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#7C4DFF',
+    borderLeftColor: '#5856D6',
   },
   aiIdeaName: {
     fontSize: 15,
@@ -1051,7 +990,7 @@ const styles = StyleSheet.create({
   },
   aiIdeaCost: {
     fontSize: 12,
-    color: '#7C4DFF',
+    color: '#5856D6',
     marginTop: 8,
     fontWeight: '500',
   },

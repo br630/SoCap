@@ -12,9 +12,9 @@ interface BudgetProgressBarProps {
 }
 
 const TIER_CONFIG: Record<BudgetTier, { color: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  FREE: { color: '#4CAF50', label: 'Free', icon: 'gift-outline' },
+  FREE: { color: '#34C759', label: 'Free', icon: 'gift-outline' },
   BUDGET: { color: '#8BC34A', label: 'Budget', icon: 'wallet-outline' },
-  MODERATE: { color: '#FF9800', label: 'Moderate', icon: 'card-outline' },
+  MODERATE: { color: '#FF9500', label: 'Moderate', icon: 'card-outline' },
   PREMIUM: { color: '#9C27B0', label: 'Premium', icon: 'diamond-outline' },
 };
 
@@ -66,7 +66,7 @@ export default function BudgetProgressBar({
       <View style={styles.progressContainer}>
         <ProgressBar
           progress={progress}
-          color={isOverBudget ? '#F44336' : tierConfig.color}
+          color={isOverBudget ? '#FF3B30' : tierConfig.color}
           style={styles.progressBar}
         />
       </View>
@@ -94,7 +94,7 @@ export default function BudgetProgressBar({
       {/* Over budget warning */}
       {isOverBudget && (
         <View style={styles.warningContainer}>
-          <Ionicons name="warning" size={16} color="#F44336" />
+          <Ionicons name="warning" size={16} color="#FF3B30" />
           <Text style={styles.warningText}>
             Over budget by ${(spent - estimated).toFixed(2)}
           </Text>
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
   },
   overBudget: {
-    color: '#F44336',
+    color: '#FF3B30',
   },
   warningContainer: {
     flexDirection: 'row',

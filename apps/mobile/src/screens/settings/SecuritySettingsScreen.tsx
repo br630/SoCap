@@ -171,7 +171,7 @@ export default function SecuritySettingsScreen() {
             title="Auto Logout After Inactivity"
             description="Logout automatically after 30 minutes of inactivity"
             left={(props) => <List.Icon {...props} icon="timer-outline" />}
-            right={() => <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />}
+            right={() => <Ionicons name="checkmark-circle" size={24} color="#34C759" />}
           />
 
           <Divider style={styles.divider} />
@@ -194,14 +194,14 @@ export default function SecuritySettingsScreen() {
             <Ionicons
               name={isCompromised ? 'warning' : 'shield-checkmark'}
               size={24}
-              color={isCompromised ? '#FF9800' : '#4CAF50'}
+              color={isCompromised ? '#FF9500' : '#34C759'}
             />
             <Text style={styles.sectionTitle}>Device Security</Text>
           </View>
 
           {isCompromised && (
             <View style={styles.warningBox}>
-              <Ionicons name="warning" size={20} color="#FF9800" />
+              <Ionicons name="warning" size={20} color="#FF9500" />
               <Text style={styles.warningText}>
                 Your device is {deviceInfo?.isCompromised ? 'jailbroken' : 'rooted'}. This may compromise security.
               </Text>
@@ -225,7 +225,7 @@ export default function SecuritySettingsScreen() {
                 <Text
                   style={[
                     styles.infoValue,
-                    { color: isCompromised ? '#FF9800' : '#4CAF50' },
+                    { color: isCompromised ? '#FF9500' : '#34C759' },
                   ]}
                 >
                   {isCompromised ? 'Compromised' : 'Secure'}
@@ -246,19 +246,19 @@ export default function SecuritySettingsScreen() {
 
           <View style={styles.featureList}>
             <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+              <Ionicons name="checkmark-circle" size={20} color="#34C759" />
               <Text style={styles.featureText}>Secure token storage</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+              <Ionicons name="checkmark-circle" size={20} color="#34C759" />
               <Text style={styles.featureText}>Automatic token refresh</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+              <Ionicons name="checkmark-circle" size={20} color="#34C759" />
               <Text style={styles.featureText}>Session timeout protection</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+              <Ionicons name="checkmark-circle" size={20} color="#34C759" />
               <Text style={styles.featureText}>Encrypted data storage</Text>
             </View>
           </View>
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   warningText: {
     flex: 1,
     fontSize: 13,
-    color: '#FF9800',
+    color: '#FF9500',
     lineHeight: 18,
   },
   deviceInfo: {

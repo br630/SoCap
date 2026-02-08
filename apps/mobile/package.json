@@ -16,6 +16,7 @@
     "test:e2e:android:build": "detox build --configuration android.emu.debug"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
     "@react-native-community/datetimepicker": "^8.6.0",
     "@react-native-firebase/app": "^23.8.4",
     "@react-native-firebase/auth": "^23.8.4",
@@ -30,6 +31,8 @@
     "expo-clipboard": "^8.0.8",
     "expo-contacts": "^15.0.11",
     "expo-crypto": "~15.0.8",
+    "expo-image-picker": "~17.0.10",
+    "expo-linear-gradient": "~15.0.8",
     "expo-local-authentication": "^17.0.8",
     "expo-notifications": "~0.32.16",
     "expo-secure-store": "^15.0.8",
